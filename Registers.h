@@ -1,0 +1,27 @@
+#ifndef REGISTERS_H
+#define REGISTERS_H
+
+#include <iostream>
+#include <iomanip>
+#include <cstdint>
+#include <string>
+
+class Registers
+{
+  public:
+    Registers()
+    {
+        for(int i = 0; i < 32; i++)
+            r[i] = 0;
+    }
+    uint32_t & operator[](const std::string &);
+    uint32_t operator[](const std::string &) const;
+    uint32_t operator[](int) const;
+    
+  private:
+    uint32_t r[32];
+};
+
+std::ostream & operator<<(std::ostream &, const Registers &);
+
+#endif
