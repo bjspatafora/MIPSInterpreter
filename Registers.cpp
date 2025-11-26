@@ -3,65 +3,115 @@
 uint32_t & Registers::operator[](const std::string & s)
 {
     if(s[0] <= '9' && s[0] >= '0')
-        return r[std::stoi(s)];
-    int i;
+    {
+        int t = std::stoi(s);
+        if(t > 31)
+            throw RegisterException();
+        return r[t];
+    }
+    if(s.length() < 2)
+        throw RegisterException();
+    int i = s[1] - '0';
     switch(s[0])
     {
         case 'v':
-            return r[2+(s[1]-'0')];
+            if(i < 0 || i > 1)
+                throw RegisterException();
+            return r[2+i];
         case 'a':
-            return r[4+(s[1]-'0')];
+            if(i < 0 || i > 3)
+                throw RegisterException();
+            return r[4+i];
         case 't':
-            i = s[1] - '0';
+            if(i < 0 || i > 9)
+                throw RegisterException();
             if(i < 8)
                 return r[8+i];
             return r[16+i];
         case 's':
-            if(s[1] == 'p')
+            if(s == "sp")
                 return r[29];
+            if(i < 0 || i > 7)
+                throw RegisterException();
             return r[16+(s[1]-'0')];
         case 'g':
-            return r[28];
+            if(s == "gp")
+                return r[28];
+            break;
         case 'f':
-            return r[30];
+            if(s == "fp")
+                return r[30];
+            break;
         case 'r':
-            return r[31];
+            if(s == "ra")
+                return r[31];
+            break;
+        default:
+            throw RegisterException();
     }
+    throw RegisterException();
 }
 
 uint32_t Registers::operator[](const std::string & s) const
 {
     if(s[0] <= '9' && s[0] >= '0')
-        return r[std::stoi(s)];
-    int i;
+    {
+        int t = std::stoi(s);
+        if(t > 31)
+            throw RegisterException();
+        return r[t];
+    }
+    if(s.length() < 2)
+        throw RegisterException();
+    int i = s[1] - '0';
     switch(s[0])
     {
         case 'z':
-            return r[0];
+            if(s == "zero")
+                return r[0];
+            break;
         case 'v':
-            return r[2+(s[1]-'0')];
+            if(i < 0 || i > 1)
+                throw RegisterException();
+            return r[2+i];
         case 'a':
-            return r[4+(s[1]-'0')];
+            if(i < 0 || i > 3)
+                throw RegisterException();
+            return r[4+i];
         case 't':
-            i = s[1] - '0';
+            if(i < 0 || i > 9)
+                throw RegisterException();
             if(i < 8)
                 return r[8+i];
             return r[16+i];
         case 's':
-            if(s[1] == 'p')
+            if(s == "sp")
                 return r[29];
+            if(i < 0 || i > 7)
+                throw RegisterException();
             return r[16+(s[1]-'0')];
         case 'g':
-            return r[28];
+            if(s == "gp")
+                return r[28];
+            break;
         case 'f':
-            return r[30];
+            if(s == "fp")
+                return r[30];
+            break;
         case 'r':
-            return r[31];
+            if(s == "ra")
+                return r[31];
+            break;
+        default:
+            throw RegisterException();
     }
+    throw RegisterException();
 }
 
 uint32_t Registers::operator[](int i) const
 {
+    if(i < 0 || i > 31)
+        throw RegisterException();
     return r[i];
 }
 

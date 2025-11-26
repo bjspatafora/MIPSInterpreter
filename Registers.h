@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <string>
 
+class RegisterException {};
+
 class Registers
 {
   public:
