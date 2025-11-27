@@ -46,6 +46,10 @@ uint32_t & Registers::operator[](const std::string & s)
             if(s == "ra")
                 return r[31];
             break;
+        case 'z':
+            if(s == "zero")
+                return r[0];
+            break;
         default:
             throw RegisterException();
     }
