@@ -1,122 +1,73 @@
 #include "Registers.h"
 
-uint32_t & Registers::operator[](const std::string & s)
-{
-    if(s[0] <= '9' && s[0] >= '0')
-    {
-        int t = std::stoi(s);
-        if(t > 31)
-            throw RegisterException();
-        return r[t];
-    }
-    if(s.length() < 2)
-        throw RegisterException();
-    int i = s[1] - '0';
-    switch(s[0])
-    {
-        case 'v':
-            if(i < 0 || i > 1)
-                throw RegisterException();
-            return r[2+i];
-        case 'a':
-            if(i < 0 || i > 3)
-                throw RegisterException();
-            return r[4+i];
-        case 't':
-            if(i < 0 || i > 9)
-                throw RegisterException();
-            if(i < 8)
-                return r[8+i];
-            return r[16+i];
-        case 's':
-            if(s == "sp")
-                return r[29];
-            if(i < 0 || i > 7)
-                throw RegisterException();
-            return r[16+(s[1]-'0')];
-        case 'g':
-            if(s == "gp")
-                return r[28];
-            break;
-        case 'f':
-            if(s == "fp")
-                return r[30];
-            break;
-        case 'r':
-            if(s == "ra")
-                return r[31];
-            break;
-        case 'z':
-            if(s == "zero")
-                return r[0];
-            break;
-        default:
-            throw RegisterException();
-    }
-    throw RegisterException();
-}
-
-uint32_t Registers::operator[](const std::string & s) const
-{
-    if(s[0] <= '9' && s[0] >= '0')
-    {
-        int t = std::stoi(s);
-        if(t > 31)
-            throw RegisterException();
-        return r[t];
-    }
-    if(s.length() < 2)
-        throw RegisterException();
-    int i = s[1] - '0';
-    switch(s[0])
-    {
-        case 'z':
-            if(s == "zero")
-                return r[0];
-            break;
-        case 'v':
-            if(i < 0 || i > 1)
-                throw RegisterException();
-            return r[2+i];
-        case 'a':
-            if(i < 0 || i > 3)
-                throw RegisterException();
-            return r[4+i];
-        case 't':
-            if(i < 0 || i > 9)
-                throw RegisterException();
-            if(i < 8)
-                return r[8+i];
-            return r[16+i];
-        case 's':
-            if(s == "sp")
-                return r[29];
-            if(i < 0 || i > 7)
-                throw RegisterException();
-            return r[16+(s[1]-'0')];
-        case 'g':
-            if(s == "gp")
-                return r[28];
-            break;
-        case 'f':
-            if(s == "fp")
-                return r[30];
-            break;
-        case 'r':
-            if(s == "ra")
-                return r[31];
-            break;
-        default:
-            throw RegisterException();
-    }
-    throw RegisterException();
-}
-
 uint32_t Registers::operator[](int i) const
 {
     if(i < 0 || i > 31)
         throw RegisterException();
     return r[i];
+}
+
+uint32_t & Registers::operator[](int i)
+{
+    if(i < 0 || i > 31)
+        throw RegisterException();
+    return r[i];
+}
+
+uint32_t Registers::getRegNum(const std::string & s)
+{
+    if(s[0] <= '9' && s[0] >= '0')
+    {
+        int t = std::stoi(s);
+        if(t > 31)
+            throw RegisterException();
+        return t;
+    }
+    if(s.length() < 2)
+        throw RegisterException();
+    int i = s[1] - '0';
+    switch(s[0])
+    {
+        case 'z':
+            if(s == "zero")
+                return 0;
+            break;
+        case 'v':
+            if(i < 0 || i > 1)
+                throw RegisterException();
+            return 2 + i;
+        case 'a':
+            if(i < 0 || i > 3)
+                throw RegisterException();
+            return 4 + i;
+        case 't':
+            if(i < 0 || i > 9)
+                throw RegisterException();
+            if(i < 8)
+                return 8 + i;
+            return 16 + i;
+        case 's':
+            if(s == "sp")
+                return 29;
+            if(i < 0 || i > 7)
+                throw RegisterException();
+            return 16 + i;
+        case 'g':
+            if(s == "gp")
+                return 28;
+            break;
+        case 'f':
+            if(s == "fp")
+                return 30;
+            break;
+        case 'r':
+            if(s == "ra")
+                return 31;
+            break;
+        default:
+            throw RegisterException();
+    }
+    throw RegisterException();
 }
 
 std::ostream & operator<<(std::ostream & cout, const Registers & reg)

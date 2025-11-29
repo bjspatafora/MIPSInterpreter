@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <functional>
+#include <limits>
 #include "Registers.h"
 
 class BadInstructException {};
@@ -44,10 +45,11 @@ std::string split_input(std::string res[4], const std::string & input)
     return LABEL;
 }
 
-uint32_t add(Registers & reg, std::string input[4])
+uint32_t normRencode(std::string input[4])
 {
     try
     {
+        uint32_t res = 0;
         if(input[3] == "" || input[2] == "" || input[1] == "" ||
            input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
             throw BadFormatException();
@@ -56,7 +58,10 @@ uint32_t add(Registers & reg, std::string input[4])
         input[3].erase(0, 1);
         if(input[1] == "0" || input[1] == "zero")
             throw RegisterException();
-        reg[input[1]] = reg[input[2]] + reg[input[3]];
+        res |= Registers::getRegNum(input[1]) << 11;
+        res |= Registers::getRegNum(input[2]) << 21;
+        res |= Registers::getRegNum(input[3]) << 16;
+        return res;
     }
     catch(BadFormatException & e)
     {
@@ -66,223 +71,25 @@ uint32_t add(Registers & reg, std::string input[4])
     {
         throw e;
     }
-    return 4;
 }
 
-uint32_t sub(Registers & reg, std::string input[4])
+uint32_t shiftRencode(std::string input[4])
 {
     try
     {
+        uint32_t res = 0;
         if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] - reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t sltu(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] < reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t slt(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = (int32_t)reg[input[2]] < (int32_t)reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t sgtu(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] > reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t sgt(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = (int32_t)reg[input[2]] < (int32_t)reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t andop(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] & reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t orop(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] | reg[input[3]];
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t norop(Registers & reg, std::string input[4])
-{
-    try
-    {
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] != '$')
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        input[3].erase(0, 1);
-        if(input[1] == "0" || input[1] == "0")
-            throw RegisterException();
-        reg[input[1]] = ~(reg[input[2]] | reg[input[3]]);
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
-    return 4;
-}
-
-uint32_t sll(Registers & reg, std::string input[4])
-{
-    try
-    {
-        int shift = std::stoi(input[3]);
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || shift < 0 ||
-           shift > 31)
+           input[1][0] != '$' || input[2][0] != '$' || input[3][0] < '0' ||
+           input[3][0] > '9')
             throw BadFormatException();
         input[1].erase(0, 1);
         input[2].erase(0, 1);
         if(input[1] == "0" || input[1] == "zero")
             throw RegisterException();
-        reg[input[1]] = reg[input[2]] << shift;
+        res |= Registers::getRegNum(input[1]) << 11;
+        res |= Registers::getRegNum(input[2]) << 16;
+        res |= std::stoi(input[3]) << 6;
+        return res;
     }
     catch(BadFormatException & e)
     {
@@ -292,23 +99,27 @@ uint32_t sll(Registers & reg, std::string input[4])
     {
         throw e;
     }
-    return 4;
 }
 
-uint32_t srl(Registers & reg, std::string input[4])
+uint32_t encode(std::string input[4])
 {
+    static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
+        {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
+        {"subu", {35, 0}}, {"slt", {42, 0}}, {"stlu", {43, 0}},
+        {"and", {36, 0}}, {"or", {37, 0}}, {"nor", {39, 0}}, {"sll", {0, 1}},
+        {"srl", {2, 1}}};
+    if(opcodes.find(input[0]) == opcodes.end())
+        throw BadInstructException();
+    uint32_t ret = opcodes[input[0]][0];
     try
     {
-        int shift = std::stoi(input[3]);
-        if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || shift < 0 ||
-           shift > 31)
-            throw BadFormatException();
-        input[1].erase(0, 1);
-        input[2].erase(0, 1);
-        if(input[1] == "0" || input[1] == "zero")
-            throw RegisterException();
-        reg[input[1]] = reg[input[2]] >> shift;
+        switch(opcodes[input[0]][1])
+        {
+            case 0:
+                return ret | normRencode(input);
+            case 1:
+                return ret | shiftRencode(input);
+        }
     }
     catch(BadFormatException & e)
     {
@@ -318,23 +129,83 @@ uint32_t srl(Registers & reg, std::string input[4])
     {
         throw e;
     }
+}
+    
+uint32_t add(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] + reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t execute(Registers & reg, std::string input[4])
+uint32_t sub(Registers & reg, uint32_t instr)
 {
-    static std::unordered_map<std::string,
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] - reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t sltu(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] < reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t slt(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = (int32_t)reg[(instr>>21)&31] < reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t andop(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] & reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t orop(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] | reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t norop(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = ~(reg[(instr>>21)&31] | reg[(instr>>16)&31]);
+    return 4;
+}
+
+uint32_t sll(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>16)&31] << ((instr >> 6) & 31);
+    return 4;
+}
+
+uint32_t srl(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>16)&31] >> ((instr >> 6) & 31);
+    return 4;
+}
+
+uint32_t executeR(Registers & reg, uint32_t instr)
+{
+    static std::unordered_map<uint32_t,
                               std::function<uint32_t(Registers &,
-                                                     std::string [4])>> ops={
-        {"add", add}, {"addu", add}, {"sub", sub}, {"subu", sub},
-        {"slt", slt}, {"sltu", sltu}, {"sgt", sgt}, {"sgtu", sgtu},
-        {"and", andop}, {"or", orop}, {"nor", norop}, {"sll", sll},
-        {"srl", srl}};
-    if(ops.find(input[0]) == ops.end())
+                                                     uint32_t)>> rOps={
+        {32, add}, {33, add}, {34, sub}, {35, sub}, {36, andop}, {37, orop},
+        {39, norop}, {42, slt}, {43, sltu}, {0, sll}, {2, srl}};
+    return rOps[instr&63](reg, instr);
+}
+
+uint32_t execute(Registers & reg, uint32_t instr)
+{
+    static std::unordered_map<uint32_t,
+                              std::function<uint32_t(Registers &,
+                                                     uint32_t)>> ops={
+        {0, executeR}};
+    if(ops.find((instr>>26)&63) == ops.end())
         throw BadInstructException();
     try
     {
-        return ops[input[0]](reg, input);
+        return ops[(instr>>26)&63](reg, instr);
     }
     catch(BadInstructException & e)
     {
@@ -359,8 +230,13 @@ int main()
     std::string input = "";
     std::string splitinput[4];
     std::unordered_map< std::string, std::string > formats = {
-        {"add", "add reg, reg, reg"}};
-    int t = 0;
+        {"add", "add reg, reg, reg"}, {"addu", "addu reg, reg, reg"},
+        {"sub", "sub reg, reg, reg"}, {"subu", "subu reg, reg, reg"},
+        {"slt", "slt reg, reg, reg"}, {"sltu", "sltu reg, reg, reg"},
+        {"and", "and reg, reg, reg"}, {"or", "or reg, reg, reg"},
+        {"nor", "nor reg, reg, reg"}, {"sll", "sll reg, reg, shamt"},
+        {"srl", "srl reg, reg, shamt"}};
+    uint32_t instr = 0;
     bool run = 1;
     std::cout << "MIPS interpreter/SPIM simulator\n"
               << "Enter ? for sim commands\n\n";
@@ -369,6 +245,7 @@ int main()
         for(int i = 0; i < 4; i++)
             splitinput[i] = "";
         std::string LABEL = "";
+        instr = 0;
         switch(segment)
         {
             case 0: // Text segment input
@@ -383,7 +260,8 @@ int main()
                 // Put label tracking stuff here when get to it
                 try
                 {
-                    PC += execute(reg, splitinput);
+                    instr = encode(splitinput);
+                    PC += execute(reg, instr);
                 }
                 catch(BadInstructException & e)
                 {
@@ -407,6 +285,8 @@ int main()
                           << "r - display register states\n"
                           << "q - quit\n";
                 std::cin >> input;
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(),
+                                '\n');
                 if(input == "t")
                     segment = 0;
                 else if(input == "r")

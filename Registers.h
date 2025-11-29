@@ -16,9 +16,9 @@ class Registers
         for(int i = 0; i < 32; i++)
             r[i] = 0;
     }
-    uint32_t & operator[](const std::string &);
-    uint32_t operator[](const std::string &) const;
     uint32_t operator[](int) const;
+    uint32_t & operator[](int);
+    static uint32_t getRegNum(const std::string &);
     
   private:
     uint32_t r[32];
