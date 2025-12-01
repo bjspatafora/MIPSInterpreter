@@ -11,6 +11,9 @@
 class BadInstructException {};
 class BadFormatException {};
 class BadRegException {};
+class LabelException {};
+
+// Splitting
 
 std::string split_input(std::string res[4], const std::string & input)
 {
@@ -18,16 +21,22 @@ std::string split_input(std::string res[4], const std::string & input)
     std::string LABEL = "";
     for(int i = 0; i < input.length(); i++)
     {
-        if(input[i] == ':' && j == 0)
+        if(input[i] == ':')
         {
-            if(LABEL == "")
-                LABEL = input.substr(0, i);
+            if(j == 0)
+            {
+                LABEL = res[0];
+                res[0] = "";
+            }
             else
-                throw BadFormatException();
+            {
+                throw LabelException();
+            }
         }
         else if(std::isspace(input[i]) || input[i] == ',')
         {
-            j++;
+            if(res[j] != "")
+                j++;
             i++;
             while(std::isspace(input[i]))
             {
@@ -44,6 +53,8 @@ std::string split_input(std::string res[4], const std::string & input)
     }
     return LABEL;
 }
+
+// Encoding
 
 uint32_t normRencode(std::string input[4])
 {
@@ -101,13 +112,43 @@ uint32_t shiftRencode(std::string input[4])
     }
 }
 
+uint32_t imIencode(std::string input[4])
+{
+    try
+    {
+        uint32_t res = 0;
+        if(input[3] == "" || input[2] == "" || input[1] == "" ||
+           input[1][0] != '$' || input[2][0] != '$' || input[3][0] < '0' ||
+           input[3][0] > '9')
+            throw BadFormatException();
+        input[1].erase(0, 1);
+        input[2].erase(0, 1);
+        if(input[1] == "0" || input[1] == "zero")
+            throw RegisterException();
+        res |= Registers::getRegNum(input[1]) << 16;
+        res |= Registers::getRegNum(input[2]) << 21;
+        res |= std::stoi(input[3]);
+        return res;
+    }
+    catch(BadFormatException & e)
+    {
+        throw e;
+    }
+    catch(RegisterException & e)
+    {
+        throw e;
+    }
+}
+
 uint32_t encode(std::string input[4])
 {
     static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
         {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
         {"subu", {35, 0}}, {"slt", {42, 0}}, {"stlu", {43, 0}},
         {"and", {36, 0}}, {"or", {37, 0}}, {"nor", {39, 0}}, {"sll", {0, 1}},
-        {"srl", {2, 1}}};
+        {"srl", {2, 1}}, {"addi", {536870912, 2}}, {"addiu", {603979776, 2}},
+        {"andi", {805306368, 2}}, {"ori", {872415232, 2}},
+        {"slti", {671088640, 2}}, {"sltiu", {738197504, 2}}};
     if(opcodes.find(input[0]) == opcodes.end())
         throw BadInstructException();
     uint32_t ret = opcodes[input[0]][0];
@@ -119,6 +160,8 @@ uint32_t encode(std::string input[4])
                 return ret | normRencode(input);
             case 1:
                 return ret | shiftRencode(input);
+            case 2:
+                return ret | imIencode(input);
         }
     }
     catch(BadFormatException & e)
@@ -130,7 +173,9 @@ uint32_t encode(std::string input[4])
         throw e;
     }
 }
-    
+
+// Execution
+
 uint32_t add(Registers & reg, uint32_t instr)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] + reg[(instr>>16)&31];
@@ -195,30 +240,44 @@ uint32_t executeR(Registers & reg, uint32_t instr)
     return rOps[instr&63](reg, instr);
 }
 
+uint32_t addi(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] + (instr & 65535);
+    return 4;
+}
+
+uint32_t andopi(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] & (instr & 65535);
+    return 4;
+}
+
+uint32_t oropi(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] | (instr & 65535);
+    return 4;
+}
+
+uint32_t slti(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>16)&31] = (int32_t)reg[(instr>>21)&31] < (int32_t)(instr & 65535);
+    return 4;
+}
+
+uint32_t sltiu(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] < (instr & 65535);
+    return 4;
+}
+
 uint32_t execute(Registers & reg, uint32_t instr)
 {
     static std::unordered_map<uint32_t,
                               std::function<uint32_t(Registers &,
                                                      uint32_t)>> ops={
-        {0, executeR}};
-    if(ops.find((instr>>26)&63) == ops.end())
-        throw BadInstructException();
-    try
-    {
-        return ops[(instr>>26)&63](reg, instr);
-    }
-    catch(BadInstructException & e)
-    {
-        throw e;
-    }
-    catch(BadFormatException & e)
-    {
-        throw e;
-    }
-    catch(RegisterException & e)
-    {
-        throw e;
-    }
+        {0, executeR}, {8, addi}, {9, addi}, {12, andopi}, {13, oropi},
+        {10, slti}, {11, sltiu}};
+    return ops[(instr>>26)&63](reg, instr);
 }
 
 int main()
@@ -227,6 +286,7 @@ int main()
     // 0 for text, 1 for data, 2 for simulator commands
     int segment = 0;
     uint32_t PC = 4194304;
+    std::unordered_map< std::string, uint32_t > labels;
     std::string input = "";
     std::string splitinput[4];
     std::unordered_map< std::string, std::string > formats = {
@@ -234,8 +294,11 @@ int main()
         {"sub", "sub reg, reg, reg"}, {"subu", "subu reg, reg, reg"},
         {"slt", "slt reg, reg, reg"}, {"sltu", "sltu reg, reg, reg"},
         {"and", "and reg, reg, reg"}, {"or", "or reg, reg, reg"},
-        {"nor", "nor reg, reg, reg"}, {"sll", "sll reg, reg, shamt"},
-        {"srl", "srl reg, reg, shamt"}};
+        {"nor", "xor reg, reg, reg"}, {"sll", "sll reg, reg, shamt"},
+        {"srl", "srl reg, reg, shamt"}, {"addi", "addi reg, reg, im"},
+        {"addiu", "addiu reg, reg, im"}, {"andi", "andi reg, reg, im"},
+        {"ori", "ori reg, reg, im"}, {"slti", "stli reg, reg, im"},
+        {"sltiu", "sltiu reg, reg, im"}};
     uint32_t instr = 0;
     bool run = 1;
     std::cout << "MIPS interpreter/SPIM simulator\n"
@@ -257,11 +320,17 @@ int main()
                     break;
                 }
                 LABEL = split_input(splitinput, input);
-                // Put label tracking stuff here when get to it
+                if(LABEL != "")
+                    labels[LABEL] = PC;
                 try
                 {
                     instr = encode(splitinput);
                     PC += execute(reg, instr);
+                }
+                catch(LabelException & e)
+                {
+                    std::cout << "\tPlease ensure labels are at the front "
+                              << "of input and are alphanumeric\n";
                 }
                 catch(BadInstructException & e)
                 {
@@ -283,7 +352,9 @@ int main()
                 std::cout << "*** OPTIONS ***\n"
                           << "t - resume interactive text segment\n"
                           << "r - display register states\n"
-                          << "q - quit\n";
+                          << "l - display labels\n"
+                          << "q - quit\n"
+                          << "OPTION >> ";
                 std::cin >> input;
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(),
                                 '\n');
@@ -291,6 +362,14 @@ int main()
                     segment = 0;
                 else if(input == "r")
                     std::cout << reg << std::endl;
+                else if(input == "l")
+                {
+                    std::cout << "*** LABELS ***\n";
+                    for(auto l : labels)
+                        std::cout << l.first << ": 0x" << l.second
+                                  << std::endl;
+                    std::cout << std::endl;
+                }
                 else if(input == "q")
                     run = 0;
                 else
