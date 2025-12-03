@@ -24,6 +24,8 @@ std::string split_input(std::string res[4], const std::string & input)
     std::string LABEL = "";
     for(int i = 0; i < input.length(); i++)
     {
+        if(input[i] == '#')
+            break;
         if(input[i] == ':')
         {
             if(j == 0)
@@ -67,6 +69,8 @@ std::string split_input(std::vector< std::string > & res,
     bool instr = 0;
     for(unsigned int i = 0; i < input.length(); i++)
     {
+        if(input[i] == '#' && !instr)
+            break;
         if(input[i] == ':' && !instr)
         {
             if(j == 0)
@@ -404,7 +408,15 @@ void newData(Memory & mem, std::vector< std::string > splitinput)
     {
         for(unsigned int i = 1; i < splitinput.size(); i++)
         {
-            bool warn = mem.databyte(splitinput[i][0]);
+            bool warn = 0;
+            try
+            {
+                warn = mem.databyte(std::stoi(splitinput[i]));
+            }
+            catch(const std::invalid_argument& e)
+            {
+                warn = mem.databyte(splitinput[i][0]);
+            }
             if(warn)
                 throw SpaceException();
         }
@@ -413,9 +425,16 @@ void newData(Memory & mem, std::vector< std::string > splitinput)
     {
         for(unsigned int i = 1; i < splitinput.size(); i++)
         {
-            bool warn = mem.dataword(std::stoi(splitinput[i]));
-            if(warn)
-                throw SpaceException();
+            try
+            {
+                bool warn = mem.dataword(std::stoi(splitinput[i]));
+                if(warn)
+                    throw SpaceException();
+            }
+            catch(const std::invalid_argument & e)
+            {
+                throw e;
+            }
         }
     }
     else if(splitinput[0] == ".asciiz")
@@ -431,9 +450,16 @@ void newData(Memory & mem, std::vector< std::string > splitinput)
     {
         for(unsigned int i = 1; i < splitinput.size(); i++)
         {
-            bool warn = mem.dataspace(std::stoi(splitinput[i]));
-            if(warn)
-                throw SpaceException();
+            try
+            {
+                bool warn = mem.dataspace(std::stoi(splitinput[i]));
+                if(warn)
+                    throw SpaceException();
+            }
+            catch(const std::invalid_argument & e)
+            {
+                throw e;
+            }
         }
     }
     else
@@ -542,6 +568,11 @@ int main()
                 {
                     newData(mem, datasplitinput);
                 }
+                catch(const std::invalid_argument & e)
+                {
+                    std::cout << "\tMake sure inputs for this type are "
+                              << "numeric\n";
+                }
                 catch(TypeException & e)
                 {
                     std::cout << "\tThat is not a valid type, please use "
@@ -558,8 +589,9 @@ int main()
                 std::cout << "*** OPTIONS ***\n"
                           << "t - resume interactive text segment\n"
                           << "d - resume interactive data segment\n"
-                          << "r - display register states\n"
-                          << "l - display labels\n"
+                          << "R - display register states\n"
+                          << "D - display data segment\n"
+                          << "L - display labels\n"
                           << "q - quit\n"
                           << "OPTION >> ";
                 std::cin >> input;
@@ -569,9 +601,11 @@ int main()
                     segment = 0;
                 else if(input == "d")
                     segment = 1;
-                else if(input == "r")
+                else if(input == "R")
                     std::cout << reg << std::endl;
-                else if(input == "l")
+                else if(input == "D")
+                    mem.showData();
+                else if(input == "L")
                 {
                     std::cout << "*** LABELS ***\n";
                     for(auto l : labels)
