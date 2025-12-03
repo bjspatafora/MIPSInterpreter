@@ -7,11 +7,14 @@
 #include <functional>
 #include <limits>
 #include "Registers.h"
+#include "Memory.h"
 
 class BadInstructException {};
 class BadFormatException {};
 class BadRegException {};
 class LabelException {};
+class TypeException {};
+class SpaceException {};
 
 // Splitting
 
@@ -51,6 +54,121 @@ std::string split_input(std::string res[4], const std::string & input)
         else
             res[j] += input[i];
     }
+    return LABEL;
+}
+
+std::string split_input(std::vector< std::string > & res,
+                        const std::string & input)
+{
+    res.clear();
+    res.push_back("");
+    unsigned int j = 0;
+    std::string LABEL = "";
+    bool instr = 0;
+    for(unsigned int i = 0; i < input.length(); i++)
+    {
+        if(input[i] == ':' && !instr)
+        {
+            if(j == 0)
+            {
+                if(res[0] == "")
+                    throw LabelException();
+                LABEL = res[0];
+                res[0] = "";
+            }
+            else
+            {
+                throw LabelException();
+            }
+        }
+        else if(std::isspace(input[i]) && !instr)
+        {
+            if(res[j] != "")
+            {
+                res.push_back("");
+                j++;
+            }
+            i++;
+            while(std::isspace(input[i]))
+            {
+                i++;
+                if(i == input.length())
+                    break;
+            }
+            if(i == input.length())
+                break;
+            i--;
+        }
+        else if(input[i] == '\"')
+            instr = !instr;
+        else if(input[i] == '\\')
+        {
+            if(!instr)
+                throw BadFormatException();
+            i++;
+            switch(input[i])
+            {
+                case '\'':
+                    res[j] += '\'';
+                    break;
+                case '"':
+                    res[j] += '\"';
+                    break;
+                case 'n':
+                    res[j] += '\n';
+                    break;
+                case 't':
+                    res[j] += '\t';
+                    break;
+                default:
+                    res[j] += '\\';
+                    res[j] += input[i];
+            }
+        }
+        else if(input[i] == '\'')
+        {
+            if(instr)
+                res[j] += '\'';
+            else
+            {
+                i++;
+                if(input[i] == '\\')
+                {
+                    i++;
+                    switch(input[i])
+                    {
+                        case '\'':
+                            res[j] += '\'';
+                            break;
+                        case '"':
+                            res[j] += '\"';
+                            break;
+                        case 'n':
+                            res[j] += '\n';
+                            break;
+                        case 't':
+                            res[j] += '\t';
+                            break;
+                        default:
+                            throw BadFormatException();
+                    }
+                }
+                else
+                {
+                    res[j] += input[i];
+                }
+                i++;
+                if(input[i] != '\'')
+                    throw BadFormatException();
+            }
+        }
+        else
+        {
+            res[j] += input[i];
+        }
+    }
+    if(res[j] == "")
+        res.pop_back();
     return LABEL;
 }
 
@@ -280,27 +398,73 @@ uint32_t execute(Registers & reg, uint32_t instr)
     return ops[(instr>>26)&63](reg, instr);
 }
 
+void newData(Memory & mem, std::vector< std::string > splitinput)
+{
+    if(splitinput[0] == ".byte")
+    {
+        for(unsigned int i = 1; i < splitinput.size(); i++)
+        {
+            bool warn = mem.databyte(splitinput[i][0]);
+            if(warn)
+                throw SpaceException();
+        }
+    }
+    else if(splitinput[0] == ".word")
+    {
+        for(unsigned int i = 1; i < splitinput.size(); i++)
+        {
+            bool warn = mem.dataword(std::stoi(splitinput[i]));
+            if(warn)
+                throw SpaceException();
+        }
+    }
+    else if(splitinput[0] == ".asciiz")
+    {
+        for(unsigned int i = 1; i < splitinput.size(); i++)
+        {
+            bool warn = mem.dataasciiz(splitinput[i]);
+            if(warn)
+                throw SpaceException();
+        }
+    }
+    else if(splitinput[0] == ".space")
+    {
+        for(unsigned int i = 1; i < splitinput.size(); i++)
+        {
+            bool warn = mem.dataspace(std::stoi(splitinput[i]));
+            if(warn)
+                throw SpaceException();
+        }
+    }
+    else
+    {
+        throw TypeException();
+    }
+}
+
 int main()
 {
     Registers reg;
+    Memory mem;
     // 0 for text, 1 for data, 2 for simulator commands
     int segment = 0;
-    uint32_t PC = 4194304;
+    uint32_t PC = 0x400000;
     std::unordered_map< std::string, uint32_t > labels;
     std::string input = "";
     std::string splitinput[4];
+    std::vector< std::string > datasplitinput;
     std::unordered_map< std::string, std::string > formats = {
         {"add", "add reg, reg, reg"}, {"addu", "addu reg, reg, reg"},
         {"sub", "sub reg, reg, reg"}, {"subu", "subu reg, reg, reg"},
         {"slt", "slt reg, reg, reg"}, {"sltu", "sltu reg, reg, reg"},
         {"and", "and reg, reg, reg"}, {"or", "or reg, reg, reg"},
-        {"nor", "xor reg, reg, reg"}, {"sll", "sll reg, reg, shamt"},
+        {"nor", "nor reg, reg, reg"}, {"sll", "sll reg, reg, shamt"},
         {"srl", "srl reg, reg, shamt"}, {"addi", "addi reg, reg, im"},
         {"addiu", "addiu reg, reg, im"}, {"andi", "andi reg, reg, im"},
         {"ori", "ori reg, reg, im"}, {"slti", "stli reg, reg, im"},
         {"sltiu", "sltiu reg, reg, im"}};
     uint32_t instr = 0;
-    bool run = 1;
+    bool run = true;
     std::cout << "MIPS interpreter/SPIM simulator\n"
               << "Enter ? for sim commands\n\n";
     while(run)
@@ -348,9 +512,52 @@ int main()
                     std::cout << "\tPlease use valid registers" << std::endl;
                 }
                 break;
+            case 1:
+                std::cout << "DATA:0x" << std::hex << mem.getCurrdata()
+                          << " > ";
+                std::getline(std::cin, input);
+                if(input == "?")
+                {
+                    segment = 2;
+                    break;
+                }
+                try
+                {
+                    LABEL = split_input(datasplitinput, input);
+                }
+                catch(LabelException & e)
+                {
+                    std::cout << "\tPlease ensure labels are at the front "
+                              << "of input and are alphanumeric\n";
+                }
+                catch(BadFormatException & e)
+                {
+                    std::cout << "\tPlease ensure all characters are in "
+                              << "quotes and all quotes are properly "
+                              << "closed\n";
+                }
+                if(LABEL != "")
+                    labels[LABEL] = mem.getCurrdata();
+                try
+                {
+                    newData(mem, datasplitinput);
+                }
+                catch(TypeException & e)
+                {
+                    std::cout << "\tThat is not a valid type, please use "
+                              << "byte, word, asciiz, or space\n";
+                }
+                catch(SpaceException & e)
+                {
+                    std::cout << "\tWARNING: DATA IS ABOUT TO OR CURRENTLY "
+                              << "ATTEMPTING OVERWRITING STACK, DO NOT ENTER "
+                              << "MORE DATA\n";
+                }
+                break;
             case 2:
                 std::cout << "*** OPTIONS ***\n"
                           << "t - resume interactive text segment\n"
+                          << "d - resume interactive data segment\n"
                           << "r - display register states\n"
                           << "l - display labels\n"
                           << "q - quit\n"
@@ -360,6 +567,8 @@ int main()
                                 '\n');
                 if(input == "t")
                     segment = 0;
+                else if(input == "d")
+                    segment = 1;
                 else if(input == "r")
                     std::cout << reg << std::endl;
                 else if(input == "l")
