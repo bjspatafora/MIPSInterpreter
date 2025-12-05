@@ -221,7 +221,7 @@ uint32_t shiftRencode(std::string input[4])
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 11;
         res |= Registers::getRegNum(input[2]) << 16;
-        res |= std::stoi(input[3]) << 6;
+        res |= (std::stoi(input[3]) & 31) << 6;
         return res;
     }
     catch(BadFormatException & e)
@@ -240,8 +240,9 @@ uint32_t imIencode(std::string input[4])
     {
         uint32_t res = 0;
         if(input[3] == "" || input[2] == "" || input[1] == "" ||
-           input[1][0] != '$' || input[2][0] != '$' || input[3][0] < '0' ||
-           input[3][0] > '9')
+           input[1][0] != '$' || input[2][0] != '$' || (input[3][0] != '-' &&
+                                                        (input[3][0] < '0' ||
+                                                         input[3][0] > '9')))
             throw BadFormatException();
         input[1].erase(0, 1);
         input[2].erase(0, 1);
@@ -249,7 +250,8 @@ uint32_t imIencode(std::string input[4])
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 16;
         res |= Registers::getRegNum(input[2]) << 21;
-        res |= std::stoi(input[3]);
+        res |= std::stoi(input[3]) & 15;
+        std::cout << "\tEncoded: " << res << std::endl;
         return res;
     }
     catch(BadFormatException & e)
@@ -532,7 +534,8 @@ uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
                                                      uint32_t &)>> ops={
         {0, executeR}, {8, addi}, {9, addi}, {12, andopi}, {13, oropi},
         {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}};
-    std::cout << '\t' << std::dec << ((instr >> 26) & 63) << std::endl;
+    if(reg[29] < mem.getCurrstack())
+        mem.incStack();
     return ops[(instr>>26)&63](reg, instr, mem, PC);
 }
 

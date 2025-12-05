@@ -22,6 +22,7 @@ class Memory
 
     uint32_t getCurrtext() const;
     uint32_t getCurrdata() const;
+    uint32_t getCurrstack() const;
 
     bool databyte(uint32_t);
     bool dataword(uint32_t);
@@ -32,7 +33,10 @@ class Memory
     uint32_t getWord(uint32_t) const;
 
     void storeWord(uint32_t, uint32_t);
+
     void incText();
+    void incStack();
+
     void showData() const;
     
   private:

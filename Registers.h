@@ -15,6 +15,7 @@ class Registers
     {
         for(int i = 0; i < 32; i++)
             r[i] = 0;
+        r[29] = 499999 * 4 + 0x400000;
     }
     uint32_t operator[](int) const;
     uint32_t & operator[](int);

@@ -10,6 +10,11 @@ uint32_t Memory::getCurrdata() const
     return currdata * 4 + 0x400000 + datacurrbyte;
 }
 
+uint32_t Memory::getCurrstack() const
+{
+    return currstack * 4 + 0x400000;
+}
+
 bool Memory::databyte(uint32_t byte)
 {
     s[currdata] |= (byte & 255) << ((3 - datacurrbyte) * 8);
@@ -90,6 +95,11 @@ void Memory::storeWord(uint32_t val, uint32_t addr)
 void Memory::incText()
 {
     currtext++;
+}
+
+void Memory::incStack()
+{
+    currstack--;
 }
 
 void Memory::showData() const
