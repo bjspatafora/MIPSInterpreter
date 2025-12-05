@@ -30,7 +30,9 @@ class Memory
 
     uint32_t getByte(uint32_t) const;
     uint32_t getWord(uint32_t) const;
-    
+
+    void storeWord(uint32_t, uint32_t);
+    void incText();
     void showData() const;
     
   private:

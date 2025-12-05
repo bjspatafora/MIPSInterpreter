@@ -262,7 +262,103 @@ uint32_t imIencode(std::string input[4])
     }
 }
 
-uint32_t encode(std::string input[4])
+uint32_t lsencode(std::string input[4])
+{
+    try
+    {
+        uint32_t res = 0;
+        if(input[3] != "" || input[2] == "" || input[1] == ""
+           || input[1][0] != '$')
+            throw BadFormatException();
+        input[1].erase(0, 1);
+        if(input[2][0] != '$')
+        {
+            unsigned int num = 0;
+            for(; num < input[2].length(); num++)
+            {
+                if(input[2][num] == '(')
+                    break;
+                input[3] += input[2][num];
+            }
+            if(input[2][num+1] != '$')
+                throw BadFormatException();
+            input[2].erase(0, num + 2);
+            if(input[2][input[2].length()-1] != ')')
+                throw BadFormatException();
+            input[2].erase(input[2].length() - 1, 1);
+        }
+        else
+        {
+            input[2].erase(0, 1);
+            input[3] = "0";
+        }
+        if(input[1] == "0" || input[1] == "zero")
+            throw RegisterException();
+        res |= Registers::getRegNum(input[1]) << 16;
+        res |= Registers::getRegNum(input[2]) << 21;
+        res |= std::stoi(input[3]);
+        return res;
+    }
+    catch(BadFormatException & e)
+    {
+        throw e;
+    }
+    catch(RegisterException & e)
+    {
+        throw e;
+    }
+}
+
+uint32_t singleAddrencode(std::string input[4], std::unordered_map< std::string, uint32_t > & labels)
+{
+    try
+    {
+        uint32_t res = 0;
+        if(input[3] != "" || input[2] != "" || input[1] == "")
+            throw BadFormatException();
+        if(input[1][0] >= '0' && input[1][0] <= '9')
+            res = std::stoi(input[1]);
+        else if(labels.find(input[1]) != labels.end())
+            res = labels[input[1]];
+        else
+            throw LabelException();
+        res =  (res >> 2) & 67108863;
+        return res;
+    }
+    catch(BadFormatException & e)
+    {
+        throw e;
+    }
+    catch(RegisterException & e)
+    {
+        throw e;
+    }
+}
+
+uint32_t singleRegencode(std::string input[4])
+{
+    try
+    {
+        uint32_t res = 0;
+        if(input[3] != "" || input[2] != "" || input[1] == "" ||
+           input[1][0] != '$')
+            throw BadFormatException();
+        input[1].erase(0, 1);
+        res |= Registers::getRegNum(input[1]) << 21;
+        return res;
+    }
+    catch(BadFormatException & e)
+    {
+        throw e;
+    }
+    catch(RegisterException & e)
+    {
+        throw e;
+    }
+}
+                          
+uint32_t encode(std::string input[4],
+                std::unordered_map< std::string, uint32_t > & labels)
 {
     static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
         {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
@@ -270,7 +366,9 @@ uint32_t encode(std::string input[4])
         {"and", {36, 0}}, {"or", {37, 0}}, {"nor", {39, 0}}, {"sll", {0, 1}},
         {"srl", {2, 1}}, {"addi", {536870912, 2}}, {"addiu", {603979776, 2}},
         {"andi", {805306368, 2}}, {"ori", {872415232, 2}},
-        {"slti", {671088640, 2}}, {"sltiu", {738197504, 2}}};
+        {"slti", {671088640, 2}}, {"sltiu", {738197504, 2}},
+        {"lw", {2348810240, 3}}, {"sw", {2885681152, 3}},
+        {"j", {134217728, 4}}, {"jr", {8, 5}}};
     if(opcodes.find(input[0]) == opcodes.end())
         throw BadInstructException();
     uint32_t ret = opcodes[input[0]][0];
@@ -284,6 +382,12 @@ uint32_t encode(std::string input[4])
                 return ret | shiftRencode(input);
             case 2:
                 return ret | imIencode(input);
+            case 3:
+                return ret | lsencode(input);
+            case 4:
+                return ret | singleAddrencode(input, labels);
+            case 5:
+                return ret | singleRegencode(input);
         }
     }
     catch(BadFormatException & e)
@@ -298,108 +402,138 @@ uint32_t encode(std::string input[4])
 
 // Execution
 
-uint32_t add(Registers & reg, uint32_t instr)
+uint32_t add(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] + reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t sub(Registers & reg, uint32_t instr)
+uint32_t sub(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] - reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t sltu(Registers & reg, uint32_t instr)
+uint32_t sltu(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] < reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t slt(Registers & reg, uint32_t instr)
+uint32_t slt(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = (int32_t)reg[(instr>>21)&31] < reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t andop(Registers & reg, uint32_t instr)
+uint32_t andop(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] & reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t orop(Registers & reg, uint32_t instr)
+uint32_t orop(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>21)&31] | reg[(instr>>16)&31];
     return 4;
 }
 
-uint32_t norop(Registers & reg, uint32_t instr)
+uint32_t norop(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = ~(reg[(instr>>21)&31] | reg[(instr>>16)&31]);
     return 4;
 }
 
-uint32_t sll(Registers & reg, uint32_t instr)
+uint32_t sll(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>16)&31] << ((instr >> 6) & 31);
     return 4;
 }
 
-uint32_t srl(Registers & reg, uint32_t instr)
+uint32_t srl(Registers & reg, uint32_t instr, uint32_t & PC)
 {
     reg[(instr>>11)&31] = reg[(instr>>16)&31] >> ((instr >> 6) & 31);
     return 4;
 }
 
-uint32_t executeR(Registers & reg, uint32_t instr)
+uint32_t jr(Registers & reg, uint32_t instr, uint32_t & PC)
+{
+    PC = reg[(instr>>21)&31];
+    return 4;
+}
+
+uint32_t executeR(Registers & reg, uint32_t instr, Memory & mem,
+                  uint32_t & PC)
 {
     static std::unordered_map<uint32_t,
                               std::function<uint32_t(Registers &,
-                                                     uint32_t)>> rOps={
+                                                     uint32_t,
+                                                     uint32_t &)>> rOps={
         {32, add}, {33, add}, {34, sub}, {35, sub}, {36, andop}, {37, orop},
-        {39, norop}, {42, slt}, {43, sltu}, {0, sll}, {2, srl}};
-    return rOps[instr&63](reg, instr);
+        {39, norop}, {42, slt}, {43, sltu}, {0, sll}, {2, srl}, {8, jr}};
+    return rOps[instr&63](reg, instr, PC);
 }
 
-uint32_t addi(Registers & reg, uint32_t instr)
+uint32_t addi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     reg[(instr>>16)&31] = reg[(instr>>21)&31] + (instr & 65535);
     return 4;
 }
 
-uint32_t andopi(Registers & reg, uint32_t instr)
+uint32_t andopi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     reg[(instr>>16)&31] = reg[(instr>>21)&31] & (instr & 65535);
     return 4;
 }
 
-uint32_t oropi(Registers & reg, uint32_t instr)
+uint32_t oropi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     reg[(instr>>16)&31] = reg[(instr>>21)&31] | (instr & 65535);
     return 4;
 }
 
-uint32_t slti(Registers & reg, uint32_t instr)
+uint32_t slti(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     reg[(instr>>16)&31] = (int32_t)reg[(instr>>21)&31] < (int32_t)(instr & 65535);
     return 4;
 }
 
-uint32_t sltiu(Registers & reg, uint32_t instr)
+uint32_t sltiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     reg[(instr>>16)&31] = reg[(instr>>21)&31] < (instr & 65535);
     return 4;
 }
 
-uint32_t execute(Registers & reg, uint32_t instr)
+uint32_t lw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    reg[(instr>>16)&31] = mem.getWord(reg[(instr>>21)&31] + (instr & 65535));
+    return 4;
+}
+
+uint32_t sw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    mem.storeWord(reg[(instr>>16)&31], reg[(instr>>21)&31] + (instr & 65535));
+    return 4;
+}
+
+uint32_t j(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    PC &= 15 << 28;
+    PC |= (instr & 67108863) << 2;
+    PC -= 4;
+    return 4;
+}
+
+uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     static std::unordered_map<uint32_t,
                               std::function<uint32_t(Registers &,
-                                                     uint32_t)>> ops={
+                                                     uint32_t, Memory &,
+                                                     uint32_t &)>> ops={
         {0, executeR}, {8, addi}, {9, addi}, {12, andopi}, {13, oropi},
-        {10, slti}, {11, sltiu}};
-    return ops[(instr>>26)&63](reg, instr);
+        {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}};
+    std::cout << '\t' << std::dec << ((instr >> 26) & 63) << std::endl;
+    return ops[(instr>>26)&63](reg, instr, mem, PC);
 }
 
 void newData(Memory & mem, std::vector< std::string > splitinput)
@@ -488,7 +622,8 @@ int main()
         {"srl", "srl reg, reg, shamt"}, {"addi", "addi reg, reg, im"},
         {"addiu", "addiu reg, reg, im"}, {"andi", "andi reg, reg, im"},
         {"ori", "ori reg, reg, im"}, {"slti", "stli reg, reg, im"},
-        {"sltiu", "sltiu reg, reg, im"}};
+        {"sltiu", "sltiu reg, reg, im"}, {"lw", "lw reg, im(reg)"},
+        {"sw", "sw reg, im(reg)"}, {"j", "j addr"}, {"jr", "jr reg"}};
     uint32_t instr = 0;
     bool run = true;
     std::cout << "MIPS interpreter/SPIM simulator\n"
@@ -502,40 +637,54 @@ int main()
         switch(segment)
         {
             case 0: // Text segment input
-                std::cout << "TEXT:0x" << std::hex << PC << " > ";
-                std::getline(std::cin, input);
-                if(input == "?")
+                if(PC < mem.getCurrtext())
                 {
-                    segment = 2;
-                    break;
+                    instr = mem.getWord(PC);
+                    PC += execute(reg, instr, mem, PC);
                 }
-                LABEL = split_input(splitinput, input);
-                if(LABEL != "")
-                    labels[LABEL] = PC;
-                try
+                else
                 {
-                    instr = encode(splitinput);
-                    PC += execute(reg, instr);
-                }
-                catch(LabelException & e)
-                {
-                    std::cout << "\tPlease ensure labels are at the front "
-                              << "of input and are alphanumeric\n";
-                }
-                catch(BadInstructException & e)
-                {
-                    std::cout << "\tSorry, that instruction doesn't exist "
-                              << "or hasn't been implemented yet...\n";
-                }
-                catch(BadFormatException & e)
-                {
-                    std::cout << "\tPlease enter the correct instruction "
-                              << "format: " << formats[splitinput[0]]
-                              << std::endl;
-                }
-                catch(RegisterException & e)
-                {
-                    std::cout << "\tPlease use valid registers" << std::endl;
+                    std::cout << "TEXT:0x" << std::hex << PC << " > ";
+                    std::getline(std::cin, input);
+                    if(input == "?")
+                    {
+                        segment = 2;
+                        break;
+                    }
+                    LABEL = split_input(splitinput, input);
+                    if(LABEL != "")
+                        labels[LABEL] = PC;
+                    try
+                    {
+                        instr = encode(splitinput, labels);
+                        mem.storeWord(instr, PC);
+                        mem.incText();
+                        PC += execute(reg, instr, mem, PC); 
+                    }
+                    catch(LabelException & e)
+                    {
+                        std::cout << "\tPlease ensure labels are at the front "
+                                  << "of input and are alphanumeric\n";
+                    }
+                    catch(BadInstructException & e)
+                    {
+                        std::cout << "\tSorry, that instruction doesn't exist "
+                                  << "or hasn't been implemented yet...\n";
+                    }
+                    catch(BadFormatException & e)
+                    {
+                        std::cout << "\tPlease enter the correct instruction "
+                                  << "format: " << formats[splitinput[0]]
+                                  << std::endl;
+                    }
+                    catch(RegisterException & e)
+                    {
+                        std::cout << "\tPlease use valid registers" << std::endl;
+                    }
+                    catch(AddressException & e)
+                    {
+                        std::cout << "\tATTEMPTING TO ACCESS INVALID MEMORY, STOP\n";
+                    }
                 }
                 break;
             case 1:

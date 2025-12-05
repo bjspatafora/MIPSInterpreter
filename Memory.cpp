@@ -75,9 +75,21 @@ uint32_t Memory::getByte(uint32_t addr) const
 
 uint32_t Memory::getWord(uint32_t addr) const
 {
-    if(addr % 4 != 0)
+    if(addr % 4 != 0 || addr < 0x400000)
         throw AddressException();
     return s[(addr - 0x400000) / 4];
+}
+
+void Memory::storeWord(uint32_t val, uint32_t addr)
+{
+    if(addr % 4 != 0 || addr < 0x400000)
+        throw AddressException();
+    s[(addr - 0x400000) / 4] = val;
+}
+
+void Memory::incText()
+{
+    currtext++;
 }
 
 void Memory::showData() const
