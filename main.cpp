@@ -250,8 +250,7 @@ uint32_t imIencode(std::string input[4])
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 16;
         res |= Registers::getRegNum(input[2]) << 21;
-        res |= std::stoi(input[3]) & 15;
-        std::cout << "\tEncoded: " << res << std::endl;
+        res |= std::stoi(input[3]) & 65534;
         return res;
     }
     catch(BadFormatException & e)
@@ -298,7 +297,7 @@ uint32_t lsencode(std::string input[4])
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 16;
         res |= Registers::getRegNum(input[2]) << 21;
-        res |= std::stoi(input[3]);
+        res |= std::stoi(input[3]) & 65534;
         return res;
     }
     catch(BadFormatException & e)
@@ -476,45 +475,52 @@ uint32_t executeR(Registers & reg, uint32_t instr, Memory & mem,
     return rOps[instr&63](reg, instr, PC);
 }
 
-uint32_t addi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+uint32_t addiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = reg[(instr>>21)&31] + (instr & 65535);
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] + im;
     return 4;
 }
 
 uint32_t andopi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = reg[(instr>>21)&31] & (instr & 65535);
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] & im;
     return 4;
 }
 
 uint32_t oropi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = reg[(instr>>21)&31] | (instr & 65535);
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] | im;
     return 4;
 }
 
 uint32_t slti(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = (int32_t)reg[(instr>>21)&31] < (int32_t)(instr & 65535);
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = (int32_t)reg[(instr>>21)&31] < im;
     return 4;
 }
 
 uint32_t sltiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = reg[(instr>>21)&31] < (instr & 65535);
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = reg[(instr>>21)&31] < im;
     return 4;
 }
 
 uint32_t lw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    reg[(instr>>16)&31] = mem.getWord(reg[(instr>>21)&31] + (instr & 65535));
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = mem.getWord(reg[(instr>>21)&31] + im);
     return 4;
 }
 
 uint32_t sw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    mem.storeWord(reg[(instr>>16)&31], reg[(instr>>21)&31] + (instr & 65535));
+    int32_t im = (int16_t)(instr & 65535);
+    mem.storeWord(reg[(instr>>16)&31], reg[(instr>>21)&31] + im);
     return 4;
 }
 
@@ -532,7 +538,7 @@ uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
                               std::function<uint32_t(Registers &,
                                                      uint32_t, Memory &,
                                                      uint32_t &)>> ops={
-        {0, executeR}, {8, addi}, {9, addi}, {12, andopi}, {13, oropi},
+        {0, executeR}, {8, addiu}, {9, addiu}, {12, andopi}, {13, oropi},
         {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}};
     if(reg[29] < mem.getCurrstack())
         mem.incStack();
@@ -744,6 +750,7 @@ int main()
                           << "R - display register states\n"
                           << "D - display data segment\n"
                           << "L - display labels\n"
+                          << "S - display current stack\n"
                           << "q - quit\n"
                           << "OPTION >> ";
                 std::cin >> input;
@@ -765,6 +772,8 @@ int main()
                                   << std::endl;
                     std::cout << std::endl;
                 }
+                else if(input == "S")
+                    mem.showStack(reg[29]);
                 else if(input == "q")
                     run = 0;
                 else

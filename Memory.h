@@ -38,6 +38,7 @@ class Memory
     void incStack();
 
     void showData() const;
+    void showStack(uint32_t) const;
     
   private:
     uint32_t s[500000];

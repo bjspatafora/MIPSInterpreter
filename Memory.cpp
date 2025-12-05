@@ -142,3 +142,22 @@ void Memory::showData() const
     std::cout << std::setfill('-') << std::setw(67) << "" << std::endl;
 }
 
+void Memory::showStack(uint32_t sp) const
+{
+    std::cout << "*** CURRENT STACK ***\n"
+              << std::setfill('=') << std::setw(52) << "" << std::endl
+              << " addr (int) | addr (hex) | value (int) | value (hex)\n"
+              << std::setfill('-') << std::setw(52) << "" << std::endl;
+    for(unsigned int i = sp; i < 6194304; i += 4)
+    {
+        uint32_t value = this->getWord(i);
+        std::cout << ' ' << std::dec << std::setfill(' ') << std::setw(10)
+                  << i << " | " << std::hex << std::setw(10) << i
+                  << " | " << std::dec << std::setw(11) << value << " | "
+                  << std::hex;
+        for(int shift = 24; shift >= 0; shift -= 8)
+            std::cout << std::setw(2) << ((value >> shift) & 255) << ' ';
+        std::cout << std::endl;
+    }
+    std::cout << std::setfill('-') << std::setw(52) << "" << std::endl;
+}   
