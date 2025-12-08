@@ -310,7 +310,7 @@ uint32_t lsencode(std::string input[4])
     }
 }
 
-uint32_t singleAddrencode(std::string input[4], std::unordered_map< std::string, uint32_t > & labels)
+uint32_t singleAddrencode(std::string input[4], uint32_t PC, std::unordered_map< std::string, uint32_t > & labels, std::unordered_map< std::string, std::vector< uint32_t >> & nonregLabels)
 {
     try
     {
@@ -322,7 +322,7 @@ uint32_t singleAddrencode(std::string input[4], std::unordered_map< std::string,
         else if(labels.find(input[1]) != labels.end())
             res = labels[input[1]];
         else
-            throw LabelException();
+            nonregLabels[input[1]].push_back(PC);
         res =  (res >> 2) & 67108863;
         return res;
     }
@@ -358,8 +358,8 @@ uint32_t singleRegencode(std::string input[4])
     }
 }
                           
-uint32_t encode(std::string input[4],
-                std::unordered_map< std::string, uint32_t > & labels)
+uint32_t encode(std::string input[4], uint32_t PC,
+                std::unordered_map< std::string, uint32_t > & labels, std::unordered_map< std::string, std::vector< uint32_t >> & nonregLabels)
 {
     static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
         {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
@@ -369,7 +369,7 @@ uint32_t encode(std::string input[4],
         {"andi", {805306368, 2}}, {"ori", {872415232, 2}},
         {"slti", {671088640, 2}}, {"sltiu", {738197504, 2}},
         {"lw", {2348810240, 3}}, {"sw", {2885681152, 3}},
-        {"j", {134217728, 4}}, {"jr", {8, 5}}};
+        {"j", {134217728, 4}}, {"jr", {8, 5}}, {"jal", {201326592, 4}}};
     if(opcodes.find(input[0]) == opcodes.end())
         throw BadInstructException();
     uint32_t ret = opcodes[input[0]][0];
@@ -386,7 +386,8 @@ uint32_t encode(std::string input[4],
             case 3:
                 return ret | lsencode(input);
             case 4:
-                return ret | singleAddrencode(input, labels);
+                return ret | singleAddrencode(input, PC, labels,
+                                              nonregLabels);
             case 5:
                 return ret | singleRegencode(input);
         }
@@ -532,6 +533,15 @@ uint32_t j(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
     return 4;
 }
 
+uint32_t jal(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    reg[31] = PC + 4;
+    PC &= 15 << 28;
+    PC |= (instr & 67108863) << 2;
+    PC -= 4;
+    return 4;
+}
+
 uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     static std::unordered_map<uint32_t,
@@ -539,7 +549,7 @@ uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
                                                      uint32_t, Memory &,
                                                      uint32_t &)>> ops={
         {0, executeR}, {8, addiu}, {9, addiu}, {12, andopi}, {13, oropi},
-        {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}};
+        {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}, {3, jal}};
     if(reg[29] < mem.getCurrstack())
         mem.incStack();
     return ops[(instr>>26)&63](reg, instr, mem, PC);
@@ -618,7 +628,9 @@ int main()
     // 0 for text, 1 for data, 2 for simulator commands
     int segment = 0;
     uint32_t PC = 0x400000;
+    uint32_t tPC = PC;
     std::unordered_map< std::string, uint32_t > labels;
+    std::unordered_map< std::string, std::vector< uint32_t >> nonregLabels;
     std::string input = "";
     std::string splitinput[4];
     std::vector< std::string > datasplitinput;
@@ -646,10 +658,11 @@ int main()
         switch(segment)
         {
             case 0: // Text segment input
-                if(PC < mem.getCurrtext())
+                if(PC < mem.getCurrtext() && tPC == PC)
                 {
                     instr = mem.getWord(PC);
                     PC += execute(reg, instr, mem, PC);
+                    tPC = PC;
                 }
                 else
                 {
@@ -662,13 +675,48 @@ int main()
                     }
                     LABEL = split_input(splitinput, input);
                     if(LABEL != "")
+                    {
                         labels[LABEL] = PC;
+                        auto nonregi = nonregLabels.find(LABEL);
+                        if(nonregi != nonregLabels.end())
+                        {
+                            for(uint32_t i : nonregLabels[LABEL])
+                            {
+                                instr = mem.getWord(i);
+                                instr |= (PC >> 2) & 67108863;
+                                mem.storeWord(instr, i);
+                            }
+                            nonregLabels.erase(nonregi);
+                        }
+                    }
                     try
                     {
-                        instr = encode(splitinput, labels);
+                        instr = encode(splitinput, PC, labels, nonregLabels);
                         mem.storeWord(instr, PC);
                         mem.incText();
-                        PC += execute(reg, instr, mem, PC); 
+                        if(tPC == PC)
+                        {
+                            if((instr == 134217728 || instr == 201326592) &&
+                               !nonregLabels.empty())
+                            {
+                                PC += 4;
+                                std::cout << "\tExecution stopped until all "
+                                          << "labels initialized\n";
+                            }
+                            else
+                            {
+                                PC += execute(reg, instr, mem, PC);
+                                tPC = PC;
+                            }
+                        }
+                        else if(nonregLabels.empty())
+                            PC = tPC;
+                        else
+                        {
+                            std::cout << "\tExecution stopped until all "
+                                      << "labels initialized\n";
+                            PC += 4;
+                        }
                     }
                     catch(LabelException & e)
                     {
