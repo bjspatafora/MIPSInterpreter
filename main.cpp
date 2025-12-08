@@ -402,6 +402,74 @@ uint32_t encode(std::string input[4], uint32_t PC,
     }
 }
 
+// Decode
+
+std::string Rdecode(uint32_t instr)
+{
+    static std::unordered_map<uint32_t, std::string> Ropsdecode = {
+        {32, "add "}, {33, "addu "}, {34, "sub "}, {35, "subu "},
+        {36, "and "}, {37, "or "}, {39, "nor "}, {42, "slt "}, {43, "sltu "},
+        {0, "sll "}, {2, "srl "}, {8, "jr "}};
+    static std::unordered_map<uint32_t, uint32_t> Rdecodefuncts = {
+        {0, 0}, {2, 0}, {8, 2}, {32, 1}, {33, 1}, {34, 1}, {35, 1}, {36, 1},
+        {37, 1}, {39, 1}, {42, 1}, {43, 1}};
+    std::string ret = Ropsdecode[instr & 63];
+    switch(Rdecodefuncts[instr&63])
+    {
+        case 0:
+            return ret + Registers::regNames[(instr>>11)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + std::to_string((instr >> 6) & 31);
+        case 1:
+            return ret + Registers::regNames[(instr>>11)&31] +
+                std::string(", ") + Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31];
+        case 2:
+            return ret + Registers::regNames[(instr>>21)&31];
+    }
+}
+
+std::string decode(uint32_t instr, uint32_t PC,
+                   std::unordered_map< uint32_t, std::string > & labels)
+{
+    static std::unordered_map<uint32_t, std::string> opsdecode = {
+        {0, ""}, {8, "addi "}, {9, "addiu "}, {12, "andi "}, {13, "ori "},
+        {10, "slti "}, {11, "sltiu "}, {35, "lw "}, {43, "sw "}, {2, "j "},
+        {3, "jal "}};
+    static std::unordered_map<uint32_t, uint32_t> decodefuncts = {
+        {0, 0}, {8, 1}, {9, 1}, {12, 1}, {13, 1}, {10, 1}, {11, 1}, {35, 2},
+        {43, 2}, {2, 3}, {3, 3}};
+    std::string ret = opsdecode[(instr>>26)&63];
+    switch(decodefuncts[(instr>>26)&63])
+    {
+        case 0:
+            return Rdecode(instr);
+        case 1:
+            return ret + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + std::to_string((int16_t)(instr & 65534));
+        case 2:
+            ret += Registers::regNames[(instr>>16)&31] + std::string(", ");
+            if(instr & 65534 == 0)
+                ret += Registers::regNames[(instr>>21)&31];
+            else
+            {
+                ret += std::to_string((int16_t)(instr & 65534)) +
+                    std::string("(") + Registers::regNames[(instr>>21)&31] +
+                    std::string(")");
+            }
+            return ret;
+        case 3:
+            if(labels.find((PC & (15 << 28)) | ((instr & 67108863) << 2)) !=
+               labels.end())
+                ret += labels[(PC&(15<<28))|((instr&67108863)<<2)];
+            else
+                ret += std::to_string((PC & (15 << 28)) |
+                                      ((instr & 67108863) << 2));
+            return ret;
+    }
+}
+
 // Execution
 
 uint32_t add(Registers & reg, uint32_t instr, uint32_t & PC)
@@ -796,6 +864,7 @@ int main()
                           << "t - resume interactive text segment\n"
                           << "d - resume interactive data segment\n"
                           << "R - display register states\n"
+                          << "T - display text segment\n"
                           << "D - display data segment\n"
                           << "L - display labels\n"
                           << "S - display current stack\n"
@@ -810,6 +879,26 @@ int main()
                     segment = 1;
                 else if(input == "R")
                     std::cout << reg << std::endl;
+                else if(input == "T")
+                {
+                    std::cout << "*** TEXT ***\n";
+                    if(!nonregLabels.empty())
+                        std::cout << "\t*** WARNING ***\n"
+                                  << "Uninitialized labels will have 0 "
+                                  << "placeholders in their stead\n"
+                                  << std::setfill('-') << std::setw(62) << ""
+                                  << std::endl;
+                    std::unordered_map< uint32_t, std::string > revlabels;
+                    for(auto p : labels)
+                        revlabels[p.second] = p.first;
+                    for(unsigned int i = 0x400000; i < mem.getCurrtext();
+                        i += 4)
+                    {
+                        std::cout << decode(mem.getWord(i), i, revlabels)
+                                  << std::endl;
+                    }
+                    std::cout << std::setw(62) << "" << std::endl;
+                }
                 else if(input == "D")
                     mem.showData();
                 else if(input == "L")

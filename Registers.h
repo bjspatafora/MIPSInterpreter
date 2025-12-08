@@ -20,6 +20,7 @@ class Registers
     uint32_t operator[](int) const;
     uint32_t & operator[](int);
     static uint32_t getRegNum(const std::string &);
+    static const std::string regNames[32];
     
   private:
     uint32_t r[32];
