@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <string>
 #include <cctype>
@@ -757,6 +758,8 @@ int main()
                             nonregLabels.erase(nonregi);
                         }
                     }
+                    if(splitinput[0] == "")
+                        continue;
                     try
                     {
                         instr = encode(splitinput, PC, labels, nonregLabels);
@@ -868,6 +871,7 @@ int main()
                           << "D - display data segment\n"
                           << "L - display labels\n"
                           << "S - display current stack\n"
+                          << "w - save to file\n"
                           << "q - quit\n"
                           << "OPTION >> ";
                 std::cin >> input;
@@ -893,10 +897,8 @@ int main()
                         revlabels[p.second] = p.first;
                     for(unsigned int i = 0x400000; i < mem.getCurrtext();
                         i += 4)
-                    {
                         std::cout << decode(mem.getWord(i), i, revlabels)
                                   << std::endl;
-                    }
                     std::cout << std::setw(62) << "" << std::endl;
                 }
                 else if(input == "D")
@@ -911,6 +913,42 @@ int main()
                 }
                 else if(input == "S")
                     mem.showStack(reg[29]);
+                else if(input == "w")
+                {
+                    if(!nonregLabels.empty())
+                    {
+                        std::cout << "\tPlease initialize all labels before "
+                                  << "saving. Uninitialized labels:\n";
+                        for(auto & l : nonregLabels)
+                            std::cout << "\t\t" << l.first << std::endl;
+                        break;
+                    }
+                    std::string filename;
+                    std::cout << "\tEnter file name: ";
+                    std::cin >> filename;
+                    std::ofstream outputFile(filename);
+                    outputFile << ".text\n.globl main\n\nmain:\n";
+                    std::unordered_map< uint32_t, std::string > revlabels;
+                    for(auto p : labels)
+                        revlabels[p.second] = p.first;
+                    for(unsigned int i = 0x400000; i < mem.getCurrtext();
+                        i += 4)
+                    {
+                        if(revlabels.find(i) != revlabels.end())
+                            outputFile << revlabels[i] << ": ";
+                        outputFile << decode(mem.getWord(i), i, revlabels)
+                                   << std::endl;
+                    }
+                    outputFile << "\n.data\n";
+                    for(unsigned int i = 0x461a84; i < mem.getCurrdata();
+                        i += 1)
+                    {
+                        if(revlabels.find(i) != revlabels.end())
+                            outputFile << revlabels[i] << ": ";
+                        outputFile << ".byte " << mem.getByte(i) << std::endl;
+                    }
+                    outputFile.close();
+                }
                 else if(input == "q")
                     run = 0;
                 else

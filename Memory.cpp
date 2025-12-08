@@ -71,11 +71,9 @@ bool Memory::dataspace(uint32_t amount)
 
 uint32_t Memory::getByte(uint32_t addr) const
 {
-    std::cout << "\tGetting byte at address " << std::hex << addr << std::endl;
-    int offset = 3 - addr % 4;
+    int offset = (3 - addr % 4) * 8;
     addr -= addr % 4;
-    addr -= 0x400000;
-    return s[addr] & (255 << (offset*8));
+    return (this->getWord(addr) >> offset) & 255;
 }
 
 uint32_t Memory::getWord(uint32_t addr) const
