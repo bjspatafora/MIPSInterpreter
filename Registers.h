@@ -21,9 +21,10 @@ class Registers
     uint32_t & operator[](int);
     static uint32_t getRegNum(const std::string &);
     static const std::string regNames[32];
+    void reset();
     
   private:
-    uint32_t r[32];
+    uint32_t r[34];
 };
 
 std::ostream & operator<<(std::ostream &, const Registers &);

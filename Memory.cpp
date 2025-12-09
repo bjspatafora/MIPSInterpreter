@@ -71,7 +71,7 @@ bool Memory::dataspace(uint32_t amount)
 
 uint32_t Memory::getByte(uint32_t addr) const
 {
-    int offset = (3 - addr % 4) * 8;
+    uint32_t offset = (3 - addr % 4) * 8;
     addr -= addr % 4;
     return (this->getWord(addr) >> offset) & 255;
 }
@@ -81,6 +81,16 @@ uint32_t Memory::getWord(uint32_t addr) const
     if(addr % 4 != 0 || addr < 0x400000)
         throw AddressException();
     return s[(addr - 0x400000) / 4];
+}
+
+void Memory::storeByte(uint32_t val, uint32_t addr)
+{
+    uint32_t offset = (3 - addr % 4) * 8;
+    addr -= addr % 4;
+    addr -= 0x400000;
+    addr /= 4;
+    s[addr] &= ~(127 << offset);
+    s[addr] |= (val << offset);
 }
 
 void Memory::storeWord(uint32_t val, uint32_t addr)
@@ -98,6 +108,17 @@ void Memory::incText()
 void Memory::incStack()
 {
     currstack--;
+}
+
+void Memory::reset()
+{
+    for(unsigned int i = 0; i < 500000; i++)
+        s[i] = 0;
+    currtext = 0;
+    textend = 100000;
+    currdata = 100001;
+    currstack = 499999;
+    datacurrbyte = 0;
 }
 
 void Memory::showData() const

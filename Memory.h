@@ -13,6 +13,8 @@ class Memory
   public:
     Memory()
     {
+        for(unsigned int i = 0; i < 500000; i++)
+            s[i] = 0;
         currtext = 0;
         textend = 100000;
         currdata = 100001;
@@ -32,10 +34,13 @@ class Memory
     uint32_t getByte(uint32_t) const;
     uint32_t getWord(uint32_t) const;
 
+    void storeByte(uint32_t, uint32_t);
     void storeWord(uint32_t, uint32_t);
 
     void incText();
     void incStack();
+
+    void reset();
 
     void showData() const;
     void showStack(uint32_t) const;

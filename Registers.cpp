@@ -7,14 +7,14 @@ const std::string Registers::regNames[32] = {"$0", "$at", "$v0", "$v1",
 
 uint32_t Registers::operator[](int i) const
 {
-    if(i < 0 || i > 31)
+    if(i < 0 || i > 33)
         throw RegisterException();
     return r[i];
 }
 
 uint32_t & Registers::operator[](int i)
 {
-    if(i < 0 || i > 31)
+    if(i < 0 || i > 33)
         throw RegisterException();
     return r[i];
 }
@@ -75,6 +75,13 @@ uint32_t Registers::getRegNum(const std::string & s)
     throw RegisterException();
 }
 
+void Registers::reset()
+{
+    for(int i = 0; i < 32; i++)
+        r[i] = 0;
+    r[29] = 499999 * 4 + 0x400000;
+}
+
 std::ostream & operator<<(std::ostream & cout, const Registers & reg)
 {
     cout << "*** REGISTERS ***\n"
@@ -109,7 +116,9 @@ std::ostream & operator<<(std::ostream & cout, const Registers & reg)
          << " |\n| $sp: 0x" << std::setw(8) << reg[29]
          << " | $fp: 0x" << std::setw(8) << reg[30]
          << " |\n| $ra: 0x" << std::setw(8) << reg[31]
-         << " |" << std::setfill(' ') << std::setw(18) << "|"
+         << " | HI:  0x" << std::setw(8) << reg[32]
+         << " |\n| LO:  0x" << std::setw(8) << reg[33] << " |"
+         << std::setfill(' ') << std::setw(18) << "|"
          << std::endl << std::setfill('=') << std::setw(37) << "";
     return cout;
 }
