@@ -17,9 +17,7 @@ uint32_t Memory::getCurrstack() const
 
 bool Memory::databyte(uint32_t byte)
 {
-    s[currdata] |= (byte & 255) << ((3 - datacurrbyte) * 8);
-    std::cout << '\t' << std::dec << byte << " stored at " << currdata * 4 + 0x400000 + datacurrbyte
-              << std::endl;
+    this->storeByte(byte, this->getCurrdata());
     datacurrbyte++;
     if(datacurrbyte == 4)
     {
@@ -31,19 +29,13 @@ bool Memory::databyte(uint32_t byte)
 
 bool Memory::dataword(uint32_t word)
 {
-    std::cout << "\tStoring " << std::dec << word << std::endl;
     if(datacurrbyte != 0)
     {
         currdata++;
         datacurrbyte = 0;
     }
-    for(int shift = 24; shift >= 0; shift -= 8)
-    {
-        bool warn = this->databyte(word & (255 << shift));
-        if(warn)
-            return 1;
-    }
-    std::cout << "\t" << s[currdata-1] << " stored\n";
+    this->storeWord(word, this->getCurrdata());
+    currdata++;
     return currdata >= currstack;
 }
 
@@ -89,8 +81,10 @@ void Memory::storeByte(uint32_t val, uint32_t addr)
     addr -= addr % 4;
     addr -= 0x400000;
     addr /= 4;
-    s[addr] &= ~(127 << offset);
+    s[addr] &= ~(255 << offset);
     s[addr] |= (val << offset);
+    if(addr > currtext && addr < currstack && addr > currdata)
+        currdata = addr;
 }
 
 void Memory::storeWord(uint32_t val, uint32_t addr)
@@ -105,9 +99,9 @@ void Memory::incText()
     currtext++;
 }
 
-void Memory::incStack()
+void Memory::incStack(uint32_t addr)
 {
-    currstack--;
+    currstack = (addr - 0x400000) / 4;
 }
 
 void Memory::reset()

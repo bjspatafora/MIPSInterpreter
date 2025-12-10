@@ -51,7 +51,20 @@ std::string split_input(std::string res[4], const std::string & input)
         else if(std::isspace(input[i]) || input[i] == ',')
         {
             if(res[j] != "")
+            {
                 j++;
+                if(j == 4)
+                {
+                    for(int k = i + 1; k < input.size(); k++)
+                    {
+                        if(input[k] == '#')
+                            return LABEL;
+                        if(!std::isspace(input[k]))
+                            throw BadFormatException();
+                    }
+                    return LABEL;
+                }
+            }
             i++;
             while(std::isspace(input[i]))
             {
@@ -193,6 +206,117 @@ std::string split_input(std::vector< std::string > & res,
     return LABEL;
 }
 
+
+// Decode
+
+std::string Rdecode(uint32_t instr)
+{
+    static std::unordered_map<uint32_t, std::string> Ropsdecode = {
+        {32, "add "}, {33, "addu "}, {34, "sub "}, {35, "subu "},
+        {36, "and "}, {37, "or "}, {39, "nor "}, {42, "slt "}, {43, "sltu "},
+        {0, "sll "}, {2, "srl "}, {8, "jr "}, {12, "syscall"}, {26, "div "},
+        {27, "divu "}, {16, "mfhi "}, {18, "mflo "}, {24, "mult "},
+        {25, "multu "}};
+    static std::unordered_map<uint32_t, uint32_t> Rdecodefuncts = {
+        {0, 0}, {2, 0}, {8, 2}, {32, 1}, {33, 1}, {34, 1}, {35, 1}, {36, 1},
+        {37, 1}, {39, 1}, {42, 1}, {43, 1}, {12, -1}, {26, 3}, {27, 3},
+        {16, 4}, {18, 4}, {24, 3}, {25, 3}};
+    std::string ret = Ropsdecode[instr & 63];
+    switch(Rdecodefuncts[instr&63])
+    {
+        case 0:
+            return ret + Registers::regNames[(instr>>11)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + std::to_string((instr >> 6) & 31);
+        case 1:
+            return ret + Registers::regNames[(instr>>11)&31] +
+                std::string(", ") + Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31];
+        case 2:
+            return ret + Registers::regNames[(instr>>21)&31];
+        case 3:
+            return ret + Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31];
+        case 4:
+            return ret + Registers::regNames[(instr>>11)&31];
+    }
+    return ret;
+}
+
+std::string specRdecode(uint32_t instr)
+{
+    static std::unordered_map<uint32_t, std::string> specRopsdecode = {
+        {2, "mul "}};
+    static std::unordered_map<uint32_t, uint32_t> specRdecodefuncts = {
+        {2, 0}};
+    std::string ret = specRopsdecode[instr & 63];
+    switch(specRdecodefuncts[instr&63])
+    {
+        case 0:
+            return ret + Registers::regNames[(instr>>11)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + Registers::regNames[(instr>>21)&31];
+    }
+    return ret;
+}
+
+std::string decode(uint32_t instr, uint32_t PC,
+                   std::unordered_map< uint32_t, std::string > & labels)
+{
+    static std::unordered_map<uint32_t, std::string> opsdecode = {
+        {0, ""}, {8, "addi "}, {9, "addiu "}, {12, "andi "}, {13, "ori "},
+        {15, "lui "}, {10, "slti "}, {11, "sltiu "}, {32, "lb "}, {40, "sb "},
+        {35, "lw "}, {43, "sw "}, {2, "j "}, {3, "jal "}, {28, ""},
+        {4, "beq "}, {5, "bne "}};
+    static std::unordered_map<uint32_t, uint32_t> decodefuncts = {
+        {0, 0}, {8, 1}, {9, 1}, {12, 1}, {13, 1}, {15, 5}, {10, 1}, {11, 1},
+        {32, 2}, {40, 2}, {35, 2}, {43, 2}, {2, 3}, {3, 3}, {28, 4}, {4, 6},
+        {5, 6}};
+    std::string ret = opsdecode[(instr>>26)&63];
+    switch(decodefuncts[(instr>>26)&63])
+    {
+        case 0:
+            return Rdecode(instr);
+        case 1:
+            return ret + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + std::to_string((int16_t)(instr & 65535));
+        case 2:
+            ret += Registers::regNames[(instr>>16)&31] + std::string(", ");
+            if(instr & 65534 == 0)
+                ret += Registers::regNames[(instr>>21)&31];
+            else
+            {
+                ret += std::to_string((int16_t)(instr & 65534)) +
+                    std::string("(") + Registers::regNames[(instr>>21)&31] +
+                    std::string(")");
+            }
+            return ret;
+        case 3:
+            if(labels.find((PC & (15 << 28)) | ((instr & 67108863) << 2)) !=
+               labels.end())
+                ret += labels[(PC&(15<<28))|((instr&67108863)<<2)];
+            else
+                ret += std::to_string((PC & (15 << 28)) |
+                                      ((instr & 67108863) << 2));
+            return ret;
+        case 4:
+            return specRdecode(instr);
+        case 5:
+            return ret + Registers::regNames[(instr>>16)&31] +
+                std::string(", ") + std::to_string((instr & 65535));
+        case 6:
+            ret += Registers::regNames[(instr>>21)&31] +
+                std::string(", ") + Registers::regNames[(instr>>16)&31] +
+                std::string(", ");
+            if((instr & 65535) == 0)
+                ret += std::string("0");
+            else
+                ret += std::to_string(PC + (instr & 65535));
+            return ret;
+    }
+}
+
 // Encoding
 
 uint32_t normRencode(std::string input[4])
@@ -291,7 +415,7 @@ uint32_t imIencode(std::string input[4])
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 16;
         res |= Registers::getRegNum(input[2]) << 21;
-        res |= std::stoi(input[3]) & 32767;
+        res |= std::stoi(input[3]) & 65535;
         return res;
     }
     catch(BadFormatException & e)
@@ -334,7 +458,7 @@ uint32_t lsencode(std::string input[4])
             input[2].erase(0, 1);
             input[3] = "0";
         }
-        if(input[1] == "0" || input[1] == "zero")
+        if(input[2] == "0" || input[2] == "zero")
             throw RegisterException();
         res |= Registers::getRegNum(input[1]) << 16;
         res |= Registers::getRegNum(input[2]) << 21;
@@ -421,58 +545,29 @@ uint32_t singleRegencode(std::string input[4])
     }
 }
 
-uint32_t encode(std::string input[4], uint32_t PC,
-                std::unordered_map< std::string, uint32_t > & labels, std::unordered_map< std::string, std::vector< uint32_t >> & nonregLabels)
+uint32_t bencode(std::string input[4], uint32_t PC,
+                 std::unordered_map< std::string, uint32_t > & labels, std::unordered_map< std::string, std::vector< uint32_t >> & nonregLabels)
 {
-    static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
-        {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
-        {"subu", {35, 0}}, {"slt", {42, 0}}, {"stlu", {43, 0}},
-        {"and", {36, 0}}, {"or", {37, 0}}, {"nor", {39, 0}}, {"sll", {0, 1}},
-        {"srl", {2, 1}}, {"addi", {536870912, 2}}, {"addiu", {603979776, 2}},
-        {"andi", {805306368, 2}}, {"ori", {872415232, 2}},
-        {"slti", {671088640, 2}}, {"sltiu", {738197504, 2}},
-        {"lw", {2348810240, 3}}, {"sw", {2885681152, 3}},
-        {"j", {134217728, 4}}, {"jr", {8, 5}}, {"jal", {201326592, 4}},
-        {"li", {603979776, 6}}, {"syscall", {12, 7}}, {"move", {33, 8}},
-        {"div", {26, 9}}, {"divu", {27, 9}}, {"mfhi", {16, 10}},
-        {"mflo", {18, 10}}};
-    if(opcodes.find(input[0]) == opcodes.end())
-        throw BadInstructException();
-    uint32_t ret = opcodes[input[0]][0];
     try
     {
-        switch(opcodes[input[0]][1])
+        uint32_t res = 0;
+        if(input[3] == "" || input[2] == "" || input[1] == "" ||
+           input[1][0] != '$' || input[2][0] != '$')
+            throw BadFormatException();
+        input[1].erase(0, 1);
+        input[2].erase(0, 1);
+        res |= Registers::getRegNum(input[1]) << 21;
+        res |= Registers::getRegNum(input[2]) << 16;
+        if(input[3][0] == '-' || (input[3][0] >= '0' && input[3][0] <= '9'))
+            res |= std::stoi(input[3]) & 65535;
+        else
         {
-            case 0:
-                return ret | normRencode(input);
-            case 1:
-                return ret | shiftRencode(input);
-            case 2:
-                return ret | imIencode(input);
-            case 3:
-                return ret | lsencode(input);
-            case 4:
-                return ret | singleAddrencode(input, PC, labels,
-                                              nonregLabels);
-            case 5:
-                return ret | singleRegSpecencode(input);
-            case 6:
-                input[3] = input[2];
-                input[2] = "$0";
-                return ret | imIencode(input);
-            case 7:
-                if(input[1] != "" || input[2] != "" || input[3] != "")
-                    throw BadFormatException();
-                return ret;
-            case 8:
-                input[3] = input[2];
-                input[2] = "$0";
-                return ret | normRencode(input);
-            case 9:
-                return ret | nonretRencode(input);
-            case 10:
-                return ret | singleRegencode(input);
+            if(labels.find(input[3]) == labels.end())
+                nonregLabels[input[3]].push_back(PC);
+            else
+                res |= (labels[input[3]] - PC) & 65535;
         }
+        return res;
     }
     catch(BadFormatException & e)
     {
@@ -484,79 +579,223 @@ uint32_t encode(std::string input[4], uint32_t PC,
     }
 }
 
-// Decode
-
-std::string Rdecode(uint32_t instr)
+uint32_t encode(std::string input[4], uint32_t & PC,
+                std::unordered_map< std::string, uint32_t > & labels, std::unordered_map< std::string, std::vector< uint32_t >> & nonregLabels,
+                Memory & mem)
 {
-    static std::unordered_map<uint32_t, std::string> Ropsdecode = {
-        {32, "add "}, {33, "addu "}, {34, "sub "}, {35, "subu "},
-        {36, "and "}, {37, "or "}, {39, "nor "}, {42, "slt "}, {43, "sltu "},
-        {0, "sll "}, {2, "srl "}, {8, "jr "}, {12, "syscall"}, {26, "div "},
-        {27, "divu "}, {16, "mfhi "}, {18, "mflo "}};
-    static std::unordered_map<uint32_t, uint32_t> Rdecodefuncts = {
-        {0, 0}, {2, 0}, {8, 2}, {32, 1}, {33, 1}, {34, 1}, {35, 1}, {36, 1},
-        {37, 1}, {39, 1}, {42, 1}, {43, 1}, {12, -1}, {26, 3}, {27, 3},
-        {16, 4}, {18, 4}};
-    std::string ret = Ropsdecode[instr & 63];
-    switch(Rdecodefuncts[instr&63])
+    static std::unordered_map< std::string, std::vector< uint32_t >> opcodes = {
+        {"add", {32, 0}}, {"addu", {33, 0}}, {"sub", {34, 0}},
+        {"subu", {35, 0}}, {"slt", {42, 0}}, {"stlu", {43, 0}},
+        {"and", {36, 0}}, {"or", {37, 0}}, {"nor", {39, 0}}, {"sll", {0, 1}},
+        {"srl", {2, 1}}, {"addi", {536870912, 2}}, {"addiu", {603979776, 2}},
+        {"andi", {805306368, 2}}, {"ori", {872415232, 2}},
+        {"lui", {1006632960, 11}}, {"slti", {671088640, 2}},
+        {"sltiu", {738197504, 2}}, {"lb", {2147483648, 3}},
+        {"sb", {2684354560, 3}}, {"lw", {2348810240, 3}},
+        {"sw", {2885681152, 3}}, {"j", {134217728, 4}}, {"jr", {8, 5}},
+        {"jal", {201326592, 4}}, {"li", {0, 6}}, {"la", {0, 6}},
+        {"syscall", {12, 7}}, {"move", {33, 8}}, {"div", {26, 9}},
+        {"divu", {27, 9}}, {"mfhi", {16, 10}}, {"mflo", {18, 10}},
+        {"mul", {1879048194, 0}}, {"mult", {24, 9}}, {"multu", {25, 9}},
+        {"beq", {268435456, 12}}, {"bne", {335544320, 12}}, {"bge", {0, 13}},
+        {"bgt", {0, 14}}, {"ble", {0, 15}}, {"blt", {0, 16}}};
+    std::unordered_map< std::uint32_t, std::string > revLabels;
+    if(opcodes.find(input[0]) == opcodes.end())
+        throw BadInstructException();
+    uint32_t ret = opcodes[input[0]][0];
+    uint32_t t;
+    try
     {
-        case 0:
-            return ret + Registers::regNames[(instr>>11)&31] +
-                std::string(", ") + Registers::regNames[(instr>>16)&31] +
-                std::string(", ") + std::to_string((instr >> 6) & 31);
-        case 1:
-            return ret + Registers::regNames[(instr>>11)&31] +
-                std::string(", ") + Registers::regNames[(instr>>21)&31] +
-                std::string(", ") + Registers::regNames[(instr>>16)&31];
-        case 2:
-            return ret + Registers::regNames[(instr>>21)&31];
-        case 3:
-            return ret + Registers::regNames[(instr>>21)&31] +
-                std::string(", ") + Registers::regNames[(instr>>16)&31];
-        case 4:
-            return ret + Registers::regNames[(instr>>11)&31];
+        switch(opcodes[input[0]][1])
+        {
+            case 0:
+                t = ret | normRencode(input);
+                mem.storeWord(t, PC);
+                mem.incText();
+                return 4;
+            case 1:
+                t = ret | shiftRencode(input);
+                if(t != 0)
+                {
+                    mem.storeWord(ret | shiftRencode(input), PC);
+                    mem.incText();
+                }
+                return 4;
+            case 2:
+                mem.storeWord(ret | imIencode(input), PC);
+                mem.incText();
+                return 4;
+            case 3:
+                mem.storeWord(ret | lsencode(input), PC);
+                mem.incText();
+                return 4;
+            case 4:
+                mem.storeWord(ret | singleAddrencode(input, PC, labels,
+                                                     nonregLabels), PC);
+                mem.incText();
+                return 4;
+            case 5:
+                mem.storeWord(ret | singleRegSpecencode(input), PC);
+                mem.incText();
+                return 4;
+            case 6: // LOAD IMMEDIATE
+                if(input[1] == "" || input[1][0] != '$' || input[3] != "")
+                    throw BadFormatException();
+                if(input[2][0] >= 'a' && input[2][0] <= 'z' ||
+                   input[2][0] >= 'A' && input[2][0] <= 'Z')
+                {
+                    if(labels.find(input[2]) != labels.end())
+                        t = labels[input[2]];
+                    else
+                    {
+                        nonregLabels[input[2]].push_back(PC);
+                        nonregLabels[input[2]].push_back(PC + 4);
+                        t = 0;
+                    }
+                }
+                else
+                    t = std::stoi(input[2]);
+                input[0] = "lui";
+                input[2] = std::to_string(t >> 16);
+                encode(input, PC, labels, nonregLabels, mem);
+                PC += 4;
+                input[0] = "ori";
+                input[1] = std::string("$") + input[1];
+                input[2] = input[1];
+                input[3] = std::to_string(t & 65535);
+                encode(input, PC, labels, nonregLabels, mem);
+                return 8;
+            case 7:
+                if(input[1] != "" || input[2] != "" || input[3] != "")
+                    throw BadFormatException();
+                mem.storeWord(ret, PC);
+                mem.incText();
+                return 4;
+            case 8:
+                input[3] = input[2];
+                input[2] = "$0";
+                mem.storeWord(ret | normRencode(input), PC);
+                mem.incText();
+                return 4;
+            case 9:
+                mem.storeWord(ret | nonretRencode(input), PC);
+                mem.incText();
+                return 4;
+            case 10:
+                mem.storeWord(ret | singleRegencode(input), PC);
+                mem.incText();
+                return 4;
+            case 11:
+                input[3] = input[2];
+                input[2] = "$0";
+                mem.storeWord(ret | imIencode(input), PC);
+                mem.incText();
+                return 4;
+            case 12:
+                t = ret | bencode(input, PC, labels, nonregLabels);
+                mem.storeWord(t, PC);
+                mem.incText();
+                return 4;
+            case 13: // BRANCH GREATER EQ
+                t = 0;
+                if(input[3] == "" || input[2] == "" || input[1] == "" ||
+                   input[1][0] != '$' || input[2][0] != '$')
+                    throw BadFormatException();
+                if(input[3][0] >= '0' && input[3][0] <= '9' ||
+                   input[3][0] == '-')
+                    t = std::stoi(input[3]);
+                else if(labels.find(input[3]) == labels.end())
+                    nonregLabels[input[3]].push_back(PC + 4);
+                else
+                    t = labels[input[3]];
+                input[3] = input[1];
+                input[1] = "$at";
+                input[0] = "slt";
+                encode(input, PC, labels, nonregLabels, mem);
+                PC += 4;
+                input[0] = "beq";
+                input[1] = "$at";
+                input[2] = "$0";
+                input[3] = std::to_string(t);
+                encode(input, PC, labels, nonregLabels, mem);
+                return 8;
+            case 14: // BRANCH GREATER
+                t = 0;
+                if(input[3] == "")
+                    throw BadFormatException();
+                if(input[3][0] >= '0' && input[3][0] <= '9' ||
+                   input[3][0] == '-')
+                    t = std::stoi(input[3]);
+                else if(labels.find(input[3]) == labels.end())
+                    nonregLabels[input[3]].push_back(PC + 4);
+                else
+                    t = labels[input[3]];
+                input[3] = input[1];
+                input[1] = "$at";
+                input[0] = "slt";
+                encode(input, PC, labels, nonregLabels, mem);
+                PC += 4;
+                input[0] = "bne";
+                input[1] = "$at";
+                input[2] = "$0";
+                input[3] = std::to_string(t);
+                encode(input, PC, labels, nonregLabels, mem);
+                return 8;
+            case 15: // BRANCH LESS EQ
+                t = 0;
+                if(input[3] == "")
+                    throw BadFormatException();
+                if(input[3][0] >= '0' && input[3][0] <= '9' ||
+                   input[3][0] == '-')
+                    t = std::stoi(input[3]);
+                else if(labels.find(input[3]) == labels.end())
+                    nonregLabels[input[3]].push_back(PC + 4);
+                else
+                    t = labels[input[3]];
+                input[3] = input[2];
+                input[2] = input[1];
+                input[1] = "$at";
+                input[0] = "slt";
+                encode(input, PC, labels, nonregLabels, mem);
+                PC += 4;
+                input[0] = "bne";
+                input[1] = "$at";
+                input[2] = "$0";
+                input[3] = std::to_string(t);
+                encode(input, PC, labels, nonregLabels, mem);
+                return 8;
+            case 16: // BRANCH LESS
+                t = 0;
+                if(input[3] == "")
+                    throw BadFormatException();
+                if(input[3][0] >= '0' && input[3][0] <= '9' ||
+                   input[3][0] == '-')
+                    t = std::stoi(input[3]);
+                else if(labels.find(input[3]) == labels.end())
+                    nonregLabels[input[3]].push_back(PC + 4);
+                else
+                    t = labels[input[3]];
+                input[3] = input[2];
+                input[2] = input[1];
+                input[1] = "$at";
+                input[0] = "slt";
+                encode(input, PC, labels, nonregLabels, mem);
+                PC += 4;
+                input[0] = "beq";
+                input[1] = "$at";
+                input[2] = "$0";
+                input[3] = std::to_string(t);
+                encode(input, PC, labels, nonregLabels, mem);
+                return 8;
+        }
     }
-    return ret;
-}
-
-std::string decode(uint32_t instr, uint32_t PC,
-                   std::unordered_map< uint32_t, std::string > & labels)
-{
-    static std::unordered_map<uint32_t, std::string> opsdecode = {
-        {0, ""}, {8, "addi "}, {9, "addiu "}, {12, "andi "}, {13, "ori "},
-        {10, "slti "}, {11, "sltiu "}, {35, "lw "}, {43, "sw "}, {2, "j "},
-        {3, "jal "}};
-    static std::unordered_map<uint32_t, uint32_t> decodefuncts = {
-        {0, 0}, {8, 1}, {9, 1}, {12, 1}, {13, 1}, {10, 1}, {11, 1}, {35, 2},
-        {43, 2}, {2, 3}, {3, 3}};
-    std::string ret = opsdecode[(instr>>26)&63];
-    switch(decodefuncts[(instr>>26)&63])
+    catch(BadFormatException & e)
     {
-        case 0:
-            return Rdecode(instr);
-        case 1:
-            return ret + Registers::regNames[(instr>>16)&31] +
-                std::string(", ") + Registers::regNames[(instr>>21)&31] +
-                std::string(", ") + std::to_string((int16_t)(instr & 65534));
-        case 2:
-            ret += Registers::regNames[(instr>>16)&31] + std::string(", ");
-            if(instr & 65534 == 0)
-                ret += Registers::regNames[(instr>>21)&31];
-            else
-            {
-                ret += std::to_string((int16_t)(instr & 65534)) +
-                    std::string("(") + Registers::regNames[(instr>>21)&31] +
-                    std::string(")");
-            }
-            return ret;
-        case 3:
-            if(labels.find((PC & (15 << 28)) | ((instr & 67108863) << 2)) !=
-               labels.end())
-                ret += labels[(PC&(15<<28))|((instr&67108863)<<2)];
-            else
-                ret += std::to_string((PC & (15 << 28)) |
-                                      ((instr & 67108863) << 2));
-            return ret;
+        throw e;
+    }
+    catch(RegisterException & e)
+    {
+        throw e;
     }
 }
 
@@ -618,7 +857,7 @@ uint32_t srl(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 
 uint32_t jr(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
-    PC = reg[(instr>>21)&31];
+    PC = reg[(instr>>21)&31] - 4;
     return 4;
 }
 
@@ -631,7 +870,7 @@ uint32_t syscall(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
     switch(reg[2])
     {
         case 1:
-            std::cout << reg[4];
+            std::cout << std::dec << (int32_t)reg[4];
             break;
         case 4:
             if(reg[4] < 0x400000)
@@ -664,15 +903,14 @@ uint32_t syscall(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
             std::cin >> s;
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             addr = reg[4];
-            i = 0;
             if(reg[5] == 0)
                 break;
-            for(; i < reg[5] - 1 && i < s.size(); i++)
+            for(i = 0; i < reg[5] - 1 && i < s.size(); i++)
             {
                 mem.storeByte(s[i], addr);
                 addr++;
             }
-            while(i < reg[5])
+            for(; i < reg[5]; i++)
             {
                 mem.storeByte(0, addr);
                 addr++;
@@ -734,6 +972,26 @@ uint32_t mflo(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
     return 4;
 }
 
+uint32_t multop(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    int64_t x = (int32_t)reg[(instr>>21)&31];
+    int64_t y = (int32_t)reg[(instr>>16)&31];
+    int64_t res = x * y;
+    reg[32] = res >> 31;
+    reg[33] = res;
+    return 4;
+}
+
+uint32_t multuop(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    uint64_t x = reg[(instr>>21)&31];
+    uint64_t y = reg[(instr>>16)&31];
+    uint64_t res = x * y;
+    reg[32] = res >> 31;
+    reg[33] = res;
+    return 4;
+}  
+
 uint32_t executeR(Registers & reg, uint32_t instr, Memory & mem,
                   uint32_t & PC)
 {
@@ -743,8 +1001,25 @@ uint32_t executeR(Registers & reg, uint32_t instr, Memory & mem,
                                                      uint32_t &)>> rOps={
         {32, add}, {33, add}, {34, sub}, {35, sub}, {36, andop}, {37, orop},
         {39, norop}, {42, slt}, {43, sltu}, {0, sll}, {2, srl}, {8, jr},
-        {12, syscall}, {26, divop}, {27, divuop}, {16, mfhi}, {18, mflo}};
+        {12, syscall}, {26, divop}, {27, divuop}, {16, mfhi}, {18, mflo},
+        {24, multop}, {25, multuop}};
     return rOps[instr&63](reg, instr, mem, PC);
+}
+
+uint32_t mul(Registers & reg, uint32_t instr)
+{
+    reg[(instr>>11)&31] = reg[(instr>>21)&31] * reg[(instr>>16)&31];
+    return 4;
+}
+
+uint32_t executeSpecR(Registers & reg, uint32_t instr, Memory & mem,
+                      uint32_t & PC)
+{
+    static std::unordered_map<uint32_t,
+                              std::function<uint32_t(Registers &,
+                                                     uint32_t)>> specrOps={
+        {2, mul}};
+    return specrOps[instr&63](reg, instr);
 }
 
 uint32_t addiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
@@ -768,6 +1043,12 @@ uint32_t oropi(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
     return 4;
 }
 
+uint32_t lui(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    reg[(instr >> 16) & 31] = instr << 16;
+    return 4;
+}
+
 uint32_t slti(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
@@ -779,6 +1060,20 @@ uint32_t sltiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
     reg[(instr>>16)&31] = reg[(instr>>21)&31] < im;
+    return 4;
+}
+
+uint32_t lb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    int32_t im = (int16_t)(instr & 65535);
+    reg[(instr>>16)&31] = mem.getByte(reg[(instr>>21)&31] + im);
+    return 4;
+}
+
+uint32_t sb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    int32_t im = (int16_t)(instr & 65535);
+    mem.storeByte(reg[(instr>>16)&31], reg[(instr>>21)&31] + im);
     return 4;
 }
 
@@ -800,8 +1095,7 @@ uint32_t j(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     PC &= 15 << 28;
     PC |= (instr & 67108863) << 2;
-    PC -= 4;
-    return 4;
+    return 0;
 }
 
 uint32_t jal(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
@@ -809,7 +1103,20 @@ uint32_t jal(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
     reg[31] = PC + 4;
     PC &= 15 << 28;
     PC |= (instr & 67108863) << 2;
-    PC -= 4;
+    return 0;
+}
+
+uint32_t beq(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    if(reg[(instr>>21)&31] == reg[(instr>>16)&31])
+        PC += (instr & 65535) - 4;
+    return 4;
+}
+
+uint32_t bne(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
+{
+    if(reg[(instr>>21)&31] != reg[(instr>>16)&31])
+        PC += (instr & 65535) - 4;
     return 4;
 }
 
@@ -820,9 +1127,8 @@ uint32_t execute(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
                                                      uint32_t, Memory &,
                                                      uint32_t &)>> ops={
         {0, executeR}, {8, addiu}, {9, addiu}, {12, andopi}, {13, oropi},
-        {10, slti}, {11, sltiu}, {35, lw}, {43, sw}, {2, j}, {3, jal}};
-    if(reg[29] < mem.getCurrstack())
-        mem.incStack();
+        {15, lui}, {10, slti}, {11, sltiu}, {32, lb}, {40, sb}, {35, lw},
+        {43, sw}, {2, j}, {3, jal}, {28, executeSpecR}, {4, beq}, {5, bne}};
     return ops[(instr>>26)&63](reg, instr, mem, PC);
 }
 
@@ -907,11 +1213,17 @@ int textinput(uint32_t PC, uint32_t tPC, Registers & reg, Memory & mem,
         {"ori", "ori reg, reg, im"}, {"slti", "stli reg, reg, im"},
         {"sltiu", "sltiu reg, reg, im"}, {"lw", "lw reg, im(reg)"},
         {"sw", "sw reg, im(reg)"}, {"j", "j addr"}, {"jr", "jr reg"},
-        {"li", "li reg, im"}, {"syscall", "syscall"}};
+        {"li", "li reg, im"}, {"syscall", "syscall"}, {"la", "la reg, im"}};
     std::string splitinput[4];
-    if(input == ".globl main")
-        return 0;
-    std::string LABEL = split_input(splitinput, input);
+    std::string LABEL;
+    try
+    {
+        LABEL = split_input(splitinput, input);
+    }
+    catch(...)
+    {
+        return -1;
+    }
     if(LABEL != "")
     {
         if(labels.find(LABEL) != labels.end())
@@ -925,8 +1237,16 @@ int textinput(uint32_t PC, uint32_t tPC, Registers & reg, Memory & mem,
         {
             for(uint32_t i : nonregLabels[LABEL])
             {
-                instr = mem.getWord(i);
-                instr |= (PC >> 2) & 67108863;
+                uint32_t instr = mem.getWord(i);
+                if(((instr >> 26) & 63) == 15)
+                    instr |= mem.getCurrtext() >> 16;
+                else if(((instr >> 26) & 63) == 13)
+                    instr |= mem.getCurrtext() & 65535;
+                else if(((instr >> 26) & 63) == 4 ||
+                        ((instr >> 26) & 63) == 5)
+                    instr |= (mem.getCurrtext() - i) & 65535;
+                else
+                    instr |= (mem.getCurrtext() >> 2) & 67108863;
                 mem.storeWord(instr, i);
             }
             nonregLabels.erase(nonregi);
@@ -936,11 +1256,11 @@ int textinput(uint32_t PC, uint32_t tPC, Registers & reg, Memory & mem,
         return 0;
     if(splitinput[0] == ".data")
         return 1;
+    if(splitinput[0] == ".globl")
+        splitinput[0] = "j";
     try
     {
-        instr = encode(splitinput, PC, labels, nonregLabels);
-        mem.storeWord(instr, PC);
-        mem.incText();
+        instr = encode(splitinput, PC, labels, nonregLabels, mem);
     }
     catch(LabelException & e)
     {
@@ -988,6 +1308,27 @@ int datainput(Memory & mem,
     try
     {
         LABEL = split_input(splitinput, input);
+        auto nonregi = nonregLabels.find(LABEL);
+        if(nonregi != nonregLabels.end())
+        {
+            for(uint32_t i : nonregLabels[LABEL])
+            {
+                uint32_t instr = mem.getWord(i);
+                if(((instr >> 26) & 63) == 15)
+                {
+                    instr |= mem.getCurrdata() >> 16;
+                }
+                else if(((instr >> 26) & 63) == 13)
+                    instr |= mem.getCurrdata() & 65535;
+                else if(((instr >> 26) & 63) == 4 ||
+                        ((instr >> 26) & 63) == 5)
+                    instr |= (mem.getCurrdata() - i) & 65535;
+                else
+                    instr |= (mem.getCurrdata() >> 2) & 67108863;
+                mem.storeWord(instr, i);
+            }
+            nonregLabels.erase(nonregi);
+        }
     }
     catch(LabelException & e)
     {
@@ -1004,7 +1345,7 @@ int datainput(Memory & mem,
                       << "closed\n";
         return -1;
     }
-    if(splitinput[0] == ".data")
+    if(splitinput[0] == ".data" || splitinput[0] == "")
         return 1;
     if(splitinput[0] == ".text")
         return 0;
@@ -1068,6 +1409,9 @@ int main()
               << "Enter ? for sim commands\n\n";
     while(run)
     {
+        // std::unordered_map< std::uint32_t, std::string > revLabels;
+        // for(auto & l : labels)
+        //     revLabels[l.second] = l.first;
         instr = 0;
         switch(segment)
         {
@@ -1075,8 +1419,19 @@ int main()
                 if(PC < mem.getCurrtext() && tPC == PC)
                 {
                     instr = mem.getWord(PC);
+                    // std::cout << "\texecuting " << decode(instr, PC,
+                    //                                       revLabels)
+                    //           << " at " << std::hex << PC << std::endl;
                     PC += execute(reg, instr, mem, PC);
-                    tPC = PC;
+                    if(PC == 4)
+                    {
+                        PC = tPC + 4;
+                        tPC = 0;
+                    }
+                    else
+                        tPC = PC;
+                    if(reg[29] < mem.getCurrstack())
+                        mem.incStack(reg[29]);
                 }
                 else
                 {
@@ -1099,29 +1454,8 @@ int main()
                     {
                         std::cout << "\tExecution is paused due to syscall "
                                   << "10\n";
-                        PC += 4;
+                        PC = mem.getCurrtext();
                         break;
-                    }
-                    if(tPC == PC)
-                    {
-                        if((instr == 134217728 || instr == 201326592) &&
-                           !nonregLabels.empty())
-                        {
-                            PC += 4;
-                            std::cout << "\tExecution stopped until all "
-                                      << "labels initialized\n";
-                        }
-                        else
-                        {
-                            PC += execute(reg, instr, mem, PC);
-                            if(PC == 4)
-                            {
-                                PC = tPC + 4;
-                                tPC = 0;
-                            }
-                            else
-                                tPC = PC;
-                        }
                     }
                     else if(nonregLabels.empty())
                         PC = tPC;
@@ -1129,7 +1463,7 @@ int main()
                     {
                         std::cout << "\tExecution stopped until all "
                                   << "labels initialized\n";
-                        PC += 4;
+                        PC = mem.getCurrtext();
                     }
                 }
                 break;
@@ -1155,6 +1489,8 @@ int main()
                           << "D - display data segment\n"
                           << "L - display labels\n"
                           << "S - display current stack\n"
+                          << "r - run from beginning\n"
+                          << "c - clear\n"
                           << "w - save to file\n"
                           << "o - load from file\n"
                           << "q - quit\n"
@@ -1182,7 +1518,8 @@ int main()
                         revlabels[p.second] = p.first;
                     for(unsigned int i = 0x400000; i < mem.getCurrtext();
                         i += 4)
-                        std::cout << decode(mem.getWord(i), i, revlabels)
+                        std::cout << "0x" << std::hex << i << " | "
+                                  << decode(mem.getWord(i), i, revlabels)
                                   << std::endl;
                     std::cout << std::setw(62) << "" << std::endl;
                 }
@@ -1194,10 +1531,29 @@ int main()
                     for(auto & l : labels)
                         std::cout << l.first << ": 0x" << std::hex << l.second
                                   << std::endl;
+                    std::cout << "*** UNREGISTERED LABELS ***\n";
+                    for(auto & l : nonregLabels)
+                        std::cout << l.first << std::endl;
                     std::cout << std::endl;
                 }
                 else if(input == "S")
                     mem.showStack(reg[29]);
+                else if(input == "r")
+                {
+                    if(nonregLabels.empty())
+                    {
+                        PC = 0x400000;
+                        tPC = PC;
+                        segment = 0;
+                    }
+                    else
+                        std::cout << "\tPlease initialize all labels before "
+                                  << "running. Uninitialized labels:\n";
+                    for(auto & l: nonregLabels)
+                        std::cout << "\t\t" << l.first << std::endl;
+                }
+                else if(input == "c")
+                    reset(reg, mem, PC, tPC, labels, nonregLabels);
                 else if(input == "w")
                 {
                     if(!nonregLabels.empty())
@@ -1248,23 +1604,24 @@ int main()
                         break;
                     }
                     reset(reg, mem, PC, tPC, labels, nonregLabels);
+                    segment = 0;
                     while(std::getline(inputFile, input))
                     {
-                        std::cout << "\t\t" << input << std::endl;
                         if(segment == 0)
                         {
                             instr = 0;
                             segment = textinput(PC, tPC, reg, mem, labels,
                                                 nonregLabels, input, instr);
-                            if(instr != 0)
-                                PC += 4;
+                            PC = mem.getCurrtext();
+                            tPC = PC;
                         }
                         else
                             segment = datainput(mem, labels, nonregLabels,
                                                 input);
                         if(segment == -1)
                         {
-                            std::cout << "\tError in file, cannot load\n";
+                            std::cout << "\tError in file, cannot load\n"
+                                      << "\tLine: " << input << std::endl;
                             reset(reg, mem, PC, tPC, labels, nonregLabels);
                             break;
                         }

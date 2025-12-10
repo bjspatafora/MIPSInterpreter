@@ -42,6 +42,8 @@ uint32_t Registers::getRegNum(const std::string & s)
                 throw RegisterException();
             return 2 + i;
         case 'a':
+            if(s[1] == 't')
+                return 1;
             if(i < 0 || i > 3)
                 throw RegisterException();
             return 4 + i;

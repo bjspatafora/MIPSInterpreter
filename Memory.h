@@ -38,7 +38,7 @@ class Memory
     void storeWord(uint32_t, uint32_t);
 
     void incText();
-    void incStack();
+    void incStack(uint32_t);
 
     void reset();
 
