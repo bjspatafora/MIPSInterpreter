@@ -1066,6 +1066,13 @@ uint32_t sltiu(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 uint32_t lb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
+    if(reg[(instr>>21)&31] + im < 0x400000 ||
+       reg[(instr>>21)&31] + im > 0x5e8480)
+    {
+        std::cout << "\tTrying to access invalid memory at 0x" << std::hex
+                  << (reg[(instr>>21)&31] + im) << ", stop\n";
+        return 4;
+    }
     reg[(instr>>16)&31] = mem.getByte(reg[(instr>>21)&31] + im);
     return 4;
 }
@@ -1073,6 +1080,13 @@ uint32_t lb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 uint32_t sb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
+    if(reg[(instr>>21)&31] + im < 0x400000 ||
+       reg[(instr>>21)&31] + im > 0x5e8480)
+    {
+        std::cout << "\tTrying to access invalid memory at 0x" << std::hex
+                  << (reg[(instr>>21)&31] + im) << ", stop\n";
+        return 4;
+    }
     mem.storeByte(reg[(instr>>16)&31], reg[(instr>>21)&31] + im);
     return 4;
 }
@@ -1080,6 +1094,13 @@ uint32_t sb(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 uint32_t lw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
+    if(reg[(instr>>21)&31] + im < 0x400000 ||
+       reg[(instr>>21)&31] + im > 0x5e8480)
+    {
+        std::cout << "\tTrying to access invalid memory at 0x" << std::hex
+                  << (reg[(instr>>21)&31] + im) << ", stop\n";
+        return 4;
+    }
     reg[(instr>>16)&31] = mem.getWord(reg[(instr>>21)&31] + im);
     return 4;
 }
@@ -1087,6 +1108,13 @@ uint32_t lw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 uint32_t sw(Registers & reg, uint32_t instr, Memory & mem, uint32_t & PC)
 {
     int32_t im = (int16_t)(instr & 65535);
+    if(reg[(instr>>21)&31] + im < 0x400000 ||
+       reg[(instr>>21)&31] + im > 0x5e8480)
+    {
+        std::cout << "\tTrying to access invalid memory at 0x" << std::hex
+                  << (reg[(instr>>21)&31] + im) << ", stop\n";
+        return 4;
+    }
     mem.storeWord(reg[(instr>>16)&31], reg[(instr>>21)&31] + im);
     return 4;
 }
